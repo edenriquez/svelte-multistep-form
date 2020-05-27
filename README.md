@@ -22,7 +22,7 @@ then import into your code
 ```
 ## Usage
 
-First you need to set up the form `stepsDescription`, `formSubtitle` and `formTitle` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}> 
+First you need to set up the form `stepsDescription`, `formSubtitle` and `formTitle` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}>`
 
 ```javascript
 let multiStepOptions = {
