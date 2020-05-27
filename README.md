@@ -18,11 +18,11 @@ npm install svelte-multistep-form
 then import into your code
 
 ```javascript
-  import { Form, Step } from "svelte-multistep-forms";
+  import { Form, Step } from "svelte-multistep-form";
 ```
 ## Usage
 
-First you need to set up the form `stepsDescription`, `formSubtitle` and `formTitle` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}> 
+First you need to set up the form `stepsDescription`, `formSubtitle` and `formTitle` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}>`
 
 ```javascript
 let multiStepOptions = {
