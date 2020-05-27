@@ -1,4 +1,5 @@
-# svelte multistep form
+# svelte multistep form [![NPM Version](https://badge.fury.io/js/svelte-multistep-form.svg?style=flat)](https://npmjs.org/package/svelte-multistep-form)
+
 
 Multi Step Form help to wrap form elements passing down styles to the component to be rendered, also it presents each form step in a ordered and stylish way.
 
@@ -7,24 +8,21 @@ Multi Step Form help to wrap form elements passing down styles to the component 
   <img width="570" src ="./screen/form-demo.gif">
 </p>
 
-## Get started
 
-Download into your project
+## Install
 
-```bash
-git clone https://github.com/edenriquez/svelte-multistep-form
-cd svelte-multistep-form 
-npm i
+```
+npm install svelte-multistep-form
 ```
 
 then import into your code
 
 ```javascript
-  import { Form, Step } from "<path>/<to>/MultiStepForm";
+  import { Form, Step } from "svelte-multistep-forms";
 ```
 ## Usage
 
-Firs you need to set up the form steps and initial config
+First you need to set up the form `stepsDescription`, `formSubtitle` and `formTitle` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}> 
 
 ```javascript
 let multiStepOptions = {
@@ -37,7 +35,7 @@ let multiStepOptions = {
   };
 ```
 
-after that you only need to call `Form` and `Step` componente in the following way
+After that you only need to call `Form` and `Step` component in the following way
 
 ```javascript
 <Form {multiStepOptions}>
@@ -46,3 +44,5 @@ after that you only need to call `Form` and `Step` componente in the following w
   </Step>
 </Form>
 ```
+
+> checkout examples folder for demo 

@@ -1,5 +1,5 @@
 <script>
-  import { Form, Step } from "./MultiStepForm";
+  import { Form, Step } from "svelte-multistep-forms";
   let resetSteps = false;
   let githubHandle, repoUrl, technology;
   let multiStepOptions = {
@@ -16,7 +16,7 @@
   };
   const categories = [
     { name: "🍕", text: "🍕 Pizza" },
-    { name: "🌮", text: "🌮 Tacos al pastos" },
+    { name: "🌮", text: "🌮 Tacos al pastor" },
     { name: "🥙", text: "🥙 Otro taco" }
   ];
 
