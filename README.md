@@ -37,7 +37,7 @@ let multiStepOptions = {
 
 After that you only need to call `Form` and `Step` component in the following way
 
-```javascript
+```html
 <Form {multiStepOptions}>
   <Step>
    // Here should be your form
@@ -45,4 +45,47 @@ After that you only need to call `Form` and `Step` component in the following wa
 </Form>
 ```
 
+## Submit form data
+
+```html
+<script> 
+import axios from "axios";
+import { Form, Step } from "svelte-multistep-form";
+
+let multiStepOptions = {
+  formTitle: "New Title ✍️",
+  formSubtitle: "Subtitle should be here",
+  stepsDescription: [
+    { title: "Input step", subtitle: "Input to fulfill" },
+    { title: "Submit", subtitle: "Save!" },
+  ]
+};
+let myInputValue; 
+
+const handleSubmit = () => {
+  const formValues = {
+    firstStepInput: myInputValue,
+  };
+  axios.post('http://my-internal-api/submit', formValues)
+  myInputValue = ''
+}
+</script>
+
+<Form {multiStepOptions}>
+  <Step>
+   <input
+    class="your-custom-class"
+    id="form-field"
+    bind:value={myInputValue}
+    placeholder="value here..." /> 
+  </Step>
+  <Step>
+    <button
+      class="your-custom-class"
+      on:click|preventDefault={handleSubmit}>
+      Save me
+    </button>
+  </Step>
+</Form>
+```
 > checkout examples folder for demo 
