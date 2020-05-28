@@ -3,7 +3,7 @@
   "main": "public/build/bundle.js",
   "module": "public/build/bundle.mjs",
   "svelte": "src/index.js",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w"
@@ -16,7 +16,11 @@
     "rollup-plugin-svelte": "^5.2.2",
     "svelte": "^3.23.0"
   },
-  "homepage": "",
+  "homepage": "https://github.com/edenriquez/svelte-multistep-form",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edenriquez/svelte-multistep-form"
+  },
   "bugs": {
     "url": "https://github.com/edenriquez/svelte-multistep-form/issues"
   }
