@@ -18,7 +18,7 @@ npm install svelte-multistep-form
 then import into your code
 
 ```javascript
-  import { Form, Step } from "svelte-multistep-forms";
+  import { Form, Step } from "svelte-multistep-form";
 ```
 ## Usage
 
