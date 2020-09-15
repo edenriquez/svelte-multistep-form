@@ -88,4 +88,16 @@ const handleSubmit = () => {
   </Step>
 </Form>
 ```
-> checkout examples folder for demo 
+
+## Examples 
+
+checkout `/examples` folder, run the following commands in order to run examples:
+
+```bash
+cd examples
+npm i 
+npm run dev
+```
+
+Go to http://localhost:5000 to see it in action 🔥
+
