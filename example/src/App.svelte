@@ -1,5 +1,5 @@
 <script>
-  import { Form, Step } from "svelte-multistep-forms";
+  import { Form, Step } from "svelte-multistep-form";
   let resetSteps = false;
   let githubHandle, repoUrl, technology;
   let multiStepOptions = {
