@@ -26,6 +26,9 @@
 </script>
 
 <style>
+  *{
+    font-family: sans-serif;
+  }
   .wide {
     width: 100%;
     width: 100%;
