@@ -25,7 +25,7 @@ describe("uuidv4", () => {
     expect(firstUuid).toHaveLength(uuidLength);
   });
 
-  it("generate a second uuid and compare the uuids", () => {
+  it("generate a second uuid and compare the first uuid with the second one", () => {
     secondUuid = uuidv4();
     expect(secondUuid).toHaveLength(uuidLength);
     expect(firstUuid).not.toBe();
@@ -52,23 +52,23 @@ describe("deleteChildNodes", () => {
 
 describe("createElementAppendTo", () => {
   let firstStep;
+  let newDiv;
+  let newDivContent;
 
   beforeEach(() => {
     const { getByText } = render(MasterForm, mock);
     firstStep = getByText("STEP 1");
+    newDiv = "div";
+    newDivContent = "new content from div";
   });
 
   it("create div and append it to existing element", () => {
-    const newDiv = "div";
-    const newDivContent = "new content from div";
     expect(firstStep).not.toContainHTML(newDivContent);
     createElementAppendTo(newDiv, newDivContent, firstStep);
     expect(firstStep).toContainHTML(newDivContent);
   });
 
   it("create div and h1 and append them to existing element", () => {
-    const newDiv = "div";
-    const newDivContent = "new content from div";
     const newH1 = "h1";
     const newH1Content = "new content from h1";
     expect(firstStep).not.toContainHTML(newDivContent);

@@ -1,17 +1,9 @@
-/**
- * mountApp
- * showError
- * showOrHide
- * updateStepStatus
- * formHasError
-**/
-
 import "@testing-library/jest-dom";
 import { render } from "@testing-library/svelte";
 import mock from "./mock";
 import { currentStep } from '../src/stores';
 import { BUTTON_OPACITY, BUTTON_DISABLED_OPACITY } from "../src/constants";
-import ExampleApp from "../example/src/App.svelte";
+import ExampleApp from "./ExampleApp.svelte";
 import MasterForm from "../src/MasterForm.svelte";
 import {
   showOrHide,
@@ -112,7 +104,7 @@ describe("formHasError", () => {
     expect(errorContainer).not.toBeVisible();
   });
 
-  it("check if form has error and trigger error", () => {
+  it("check for error and trigger error", () => {
     formHasError();
     expect(errorContainer).toBeInTheDocument();
     expect(errorContainer).toBeVisible();
@@ -148,18 +140,18 @@ describe("updateButtonVisibility", () => {
     next = getByText('next');
   });
 
-  it("check if on the first step the prev button is partly visible", () => {
+  it("on the first step, the prev button is partly visible", () => {
     updateButtonVisibility();
     expect(prev).toHaveStyle(`opacity: ${BUTTON_DISABLED_OPACITY}`);
   });
   
-  it("check if on the second step the prev button is fully visible", () => {
+  it("on the second step, the prev button is fully visible", () => {
     currentStep.increment();
     updateButtonVisibility();
     expect(prev).toHaveStyle(`opacity: ${BUTTON_OPACITY}`);
   });
   
-  it("check if on the first step the next button is fully visible", () => {
+  it("on the first step, the next button is fully visible", () => {
     expect(next).toHaveStyle(`opacity: ${BUTTON_OPACITY}`);
   });
 });
