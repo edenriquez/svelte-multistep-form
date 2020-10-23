@@ -1,9 +1,3 @@
-/**
- * uuidv4
- * deleteChildNodes
- * createElementAppendTo
- **/
-
 import "@testing-library/jest-dom";
 import { render } from "@testing-library/svelte";
 import MasterForm from "../src/MasterForm.svelte";
