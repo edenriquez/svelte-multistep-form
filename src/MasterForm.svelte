@@ -1,125 +1,58 @@
 <script>
+  import { onMount, afterUpdate } from "svelte";
+  import { currentStep } from "./stores.js";
+  import {
+    uuidv4,
+    formHasError,
+    updateStepStatus,
+    updateButtonVisibility
+  } from "./helpers.js";
+
   export let multiStepOptions;
   export let resetSteps;
-  let currentStep = 0;
 
-  import { onMount, afterUpdate } from "svelte";
-  // TODO: think about it if this is nedeed or useless
-  const uuidv4 = () => {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
-      var r = (Math.random() * 16) | 0,
-        v = c == "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  };
-
-  const setPrevButtonOpacity = () => {
-    let prev = document.querySelector("#multistep-prev");
-    prev.style.opacity = 1;
-    if (currentStep == 0) {
-      prev.style.opacity = 0.5;
-    }
-  };
-
-  const setNextButtonOpacity = itemsLenght => {
-    let next = document.querySelector("#multistep-next");
-    next.style.opacity = 1;
-    if (currentStep == itemsLenght - 1) {
-      next.style.opacity = 0.5;
-    }
-  };
-
+  /*
+  Lifecycle Hooks
+  */
   onMount(async () => {
     let steps = document.querySelectorAll(".step");
+
     steps.forEach((step, index) => {
       step.setAttribute("id", uuidv4());
       step.dataset.stepNumber = index;
-      if (currentStep === index) {
+      if ($currentStep === index) {
         step.classList.remove("step-not-active");
         step.classList.add("step-is-active");
       }
     });
-    setPrevButtonOpacity();
-    setNextButtonOpacity(steps.length);
+    
+    updateButtonVisibility();
   });
 
   afterUpdate(async () => {
     if (resetSteps) {
-      let steps = document.querySelectorAll(".step");
-      steps[currentStep].classList.remove("step-is-active");
-      steps[currentStep].classList.add("step-not-active");
-      currentStep = 0;
-      steps[currentStep].classList.remove("step-not-active");
-      steps[currentStep].classList.add("step-is-active");
-      setPrevButtonOpacity();
-      setNextButtonOpacity(steps.length);
+      updateStepStatus(stepStore.reset);
       resetSteps = false;
     }
   });
 
-  const formHasError = step => {
-    const requiredFields = step.querySelectorAll("[required]");
-    let hasError = false;
-    let errorMessages = [];
-    requiredFields.forEach(el => {
-      if (!el.checkValidity()) {
-        hasError = true;
-        errorMessages.push(el.dataset.multistepErrorMessage);
-      }
-    });
-    if (hasError) {
-      showError(errorMessages);
+  /*
+  App-navigation
+  */
+  const nextStep = () => {
+    const steps = document.querySelectorAll(".step");
+    if (formHasError()) {
+      return;
     }
-    return hasError;
-  };
-  const deleteChildNodes = el => {
-    while (el.firstChild) {
-      el.removeChild(el.firstChild);
+    if ($currentStep + 1 <= steps.length - 1) {
+      updateStepStatus(currentStep.increment);
     }
-  };
-
-  const showError = errorMessages => {
-    let errorField = document.querySelector("#multistep-error-messages");
-    deleteChildNodes(errorField);
-    errorField.style.visibility = "visible";
-    errorField.style.opacity = 1;
-    errorMessages.forEach(message => {
-      let p = document.createElement("p");
-      p.innerText = message;
-      errorField.appendChild(p);
-    });
-    setTimeout(() => {
-      errorField.style.visibility = "hidden";
-      errorField.style.opacity = 0;
-    }, 3000);
   };
 
   const previousStep = () => {
-    let steps = document.querySelectorAll(".step");
-    if (currentStep - 1 > -1) {
-      steps[currentStep].classList.add("step-not-active");
-      currentStep -= 1;
-      steps[currentStep].classList.remove("step-not-active");
-      steps[currentStep].classList.add("step-is-active");
+    if ($currentStep - 1 > -1) {
+      updateStepStatus(currentStep.decrement);
     }
-    setPrevButtonOpacity();
-    setNextButtonOpacity(steps.length);
-  };
-
-  const nextStep = () => {
-    let steps = document.querySelectorAll(".step");
-    if (formHasError(steps[currentStep])) {
-      return;
-    }
-    if (currentStep + 1 <= steps.length - 1) {
-      steps[currentStep].classList.remove("step-is-active");
-      steps[currentStep].classList.add("step-not-active");
-      currentStep += 1;
-      steps[currentStep].classList.remove("step-not-active");
-      steps[currentStep].classList.add("step-is-active");
-    }
-    setPrevButtonOpacity();
-    setNextButtonOpacity(steps.length);
   };
 </script>
 
@@ -260,17 +193,17 @@
         <div class="separator-line">
           <span class="dot" />
         </div>
-        {#if currentStep === index}
+        {#if $currentStep === index}
           <div class="separator-check-current">
             <div class="separator-check-number">{index + 1}</div>
           </div>
-        {:else if currentStep > index}
+        {:else if $currentStep > index}
           <div class="separator-check">
             <svg viewBox="0 0 32 32" style="fill:#48DB71">
               <path d="M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z" />
             </svg>
           </div>
-        {:else if currentStep < index}
+        {:else if $currentStep < index}
           <div class="separator-check-pending">
             <div class="separator-check-number-blank">{index + 1}</div>
           </div>
