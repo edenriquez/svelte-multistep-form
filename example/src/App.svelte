@@ -29,6 +29,9 @@
   *{
     font-family: sans-serif;
   }
+  .example-main {
+    margin: 50px;
+  }
   .wide {
     width: 100%;
     width: 100%;
@@ -64,7 +67,7 @@
   }
 </style>
 
-<main>
+<main class="example-main">
   <Form {multiStepOptions} bind:resetSteps>
     <Step>
       <div>
