@@ -1,5 +1,5 @@
 <script>
-  import { Form, Step } from "svelte-multistep-form";
+  import { Form, Step } from "../public/build/bundle.js";
   let resetSteps = false;
   let githubHandle, repoUrl, technology;
   let multiStepOptions = {
@@ -7,7 +7,8 @@
     formSubtitle: "Subtitle should be here",
     stepsDescription: [
       { title: "STEP 1", subtitle: "All the details to perform on this step" },
-      { title: "STEP 2", subtitle: "All the details to perform on this step" }
+      { title: "STEP 2", subtitle: "All the details to perform on this step" },
+      { title: "STEP 3", subtitle: "All the details to perform on this step" }
     ]
   };
   let selected = {
@@ -19,6 +20,11 @@
     { name: "🌮", text: "🌮 Tacos al pastor" },
     { name: "🥙", text: "🥙 Otro taco" }
   ];
+  const movies = [
+    { name: "The Dark Knight", text: "The Dark Knight (2008)" },
+    { name: "Inception", text: "Inception (2010)" },
+    { name: "Forrest Gump", text: "Forrest Gump (1994)" }
+  ];
 
   const handleTyping = event => {
     repoUrl = `http://github.com/${event.target.value}/`;
@@ -28,9 +34,6 @@
 <style>
   *{
     font-family: sans-serif;
-  }
-  .example-main {
-    margin: 50px;
   }
   .wide {
     width: 100%;
@@ -67,7 +70,7 @@
   }
 </style>
 
-<main class="example-main">
+<main>
   <Form {multiStepOptions} bind:resetSteps>
     <Step>
       <div>
@@ -97,6 +100,19 @@
     <Step>
       <div>
         <label class="input-label" for="form-category-field">Food:</label>
+        <select
+          class="select-categories wide"
+          data-multistep-error-message="Select a profile"
+          bind:value={selected}>
+          {#each categories as category}
+            <option value={category}>{category.text}</option>
+          {/each}
+        </select>
+      </div>
+    </Step>
+    <Step>
+      <div>
+        <label class="input-label" for="form-category-field">Movies:</label>
         <select
           class="select-categories wide"
           data-multistep-error-message="Select a profile"
