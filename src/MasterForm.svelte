@@ -11,6 +11,14 @@
   export let multiStepOptions;
   export let resetSteps;
 
+  multiStepOptions = {
+    formTitle : 'Hello world',
+    formSubtitle : 'Welcome to our world',
+    formMethodType : 'POST',
+    prevMessageText : 'Previous',
+    nextMessageText : 'Next'
+  }
+
   /*
   Lifecycle Hooks
   */
@@ -179,12 +187,12 @@
   <div id="multistep-error-messages" />
   <h1 class="multistep-form-title">{multiStepOptions.formTitle}</h1>
   <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle}</h5>
-  <form class="multistep-form">
+  <form class="multistep-form" method="{multiStepOptions.formMethodType}">
     <div class="multistep-left-sidebar">
       {#each multiStepOptions.stepsDescription as step}
         <div class="multistep-title-side">
-          <span class="name">{step.title}</span>
-          <span class="subtitle">{step.subtitle}</span>
+          <span class="name"><pre>{step.title}</pre></span>
+          <span class="subtitle"><pre>{step.subtitle}</pre></span>
         </div>
       {/each}
     </div>
@@ -217,8 +225,8 @@
     <!-- end of  StepForm  -->
   </form>
   <div class="multistep-continue-button">
-    <span on:click={previousStep} id="multistep-prev">prev</span>
+    <span on:click={previousStep} id="multistep-prev">{multiStepOptions.prevMessageText}</span>
     |
-    <span on:click={nextStep} id="multistep-next">next</span>
+    <span on:click={nextStep} id="multistep-next">{multiStepOptions.nextMessageText}</span>
   </div>
 </div>
