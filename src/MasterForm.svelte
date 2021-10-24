@@ -16,7 +16,8 @@
     formSubtitle : 'Welcome to our world',
     formMethodType : 'POST',
     prevMessageText : 'Previous',
-    nextMessageText : 'Next'
+    nextMessageText : 'Next',
+    formActionURL:'/'
   }
 
   multiStepOptions = Object.assign({}, defaultStepOptions,  multiStepOptions)
@@ -189,7 +190,7 @@
   <div id="multistep-error-messages" />
   <h1 class="multistep-form-title">{multiStepOptions.formTitle}</h1>
   <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle}</h5>
-  <form class="multistep-form" method="{multiStepOptions.formMethodType}">
+  <form class="multistep-form" method="{multiStepOptions.formMethodType}" action="{multiStepOptions.formActionURL}">
     <div class="multistep-left-sidebar">
       {#each multiStepOptions.stepsDescription as step}
         <div class="multistep-title-side">
