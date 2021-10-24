@@ -1,4 +1,4 @@
-# svelte multistep form [![NPM Version](https://badge.fury.io/js/svelte-advanced-multistep-form.svg?style=flat)](https://npmjs.org/package/svelte-advanced-multistep-form)
+# svelte advanced multistep form [![NPM Version](https://badge.fury.io/js/svelte-advanced-multistep-form.svg?style=flat)](https://npmjs.org/package/svelte-advanced-multistep-form)
 
 
 Multi Step Form help to wrap form elements passing down styles to the component to be rendered, also it presents each form step in a ordered and stylish way.
