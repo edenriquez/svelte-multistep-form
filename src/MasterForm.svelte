@@ -17,7 +17,19 @@
     formMethodType : 'POST',
     prevMessageText : 'Previous',
     nextMessageText : 'Next',
-    formActionURL:'/'
+    formActionURL:'/',
+    formID : 's-multistep-form',
+    displayIndex : true,
+    svgCircleColor : "#48DB71",
+    selectCircleColor : "red",
+    selectboxShadowCircleColor :  "#48DB71",
+    unselectboxShadowCircleColor : "#48DB71",
+    indexblanckColor : 'black',
+    indexColor : 'black',
+    stepsDescription: [
+      { title: "STEP 1", subtitle: "All the details to perform on this step" },
+      { title: "STEP 2", subtitle: "All the details to perform on this step" }
+    ]
   }
 
   multiStepOptions = Object.assign({}, defaultStepOptions,  multiStepOptions)
@@ -190,7 +202,7 @@
   <div id="multistep-error-messages" />
   <h1 class="multistep-form-title">{multiStepOptions.formTitle}</h1>
   <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle}</h5>
-  <form class="multistep-form" method="{multiStepOptions.formMethodType}" action="{multiStepOptions.formActionURL}">
+  <form class="multistep-form" id="{multiStepOptions.formID}" method="{multiStepOptions.formMethodType}" action="{multiStepOptions.formActionURL}">
     <div class="multistep-left-sidebar">
       {#each multiStepOptions.stepsDescription as step}
         <div class="multistep-title-side">
@@ -205,18 +217,22 @@
           <span class="dot" />
         </div>
         {#if $currentStep === index}
-          <div class="separator-check-current">
-            <div class="separator-check-number">{index + 1}</div>
+          <div class="separator-check-current" style="background: {multiStepOptions.selectCircleColor}; box-shadow:  0px 1px 8px {multiStepOptions.selectboxShadowCircleColor}">
+            {#if multiStepOptions.displayIndex }
+              <div class="separator-check-number" style="color: {multiStepOptions.indexColor}">{index + 1}</div>
+            {/if}
           </div>
         {:else if $currentStep > index}
           <div class="separator-check">
-            <svg viewBox="0 0 32 32" style="fill:#48DB71">
-              <path d="M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z" />
-            </svg>
+              <svg viewBox="0 0 32 32" style="fill: {multiStepOptions.svgCircleColor}">
+                <path d="M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z" />
+              </svg>
           </div>
         {:else if $currentStep < index}
-          <div class="separator-check-pending">
-            <div class="separator-check-number-blank">{index + 1}</div>
+          <div class="separator-check-pending" style=" box-shadow:  0px 1px 8px {multiStepOptions.unselectboxShadowCircleColor}">
+            {#if multiStepOptions.displayIndex }
+              <div class="separator-check-number-blank" style="color: {multiStepOptions.indexblanckColor}">{index + 1}</div>
+            {/if}
           </div>
         {/if}
       {/each}

@@ -5,7 +5,7 @@ Multi Step Form help to wrap form elements passing down styles to the component 
 
 ### Demo
 <p align="center">
-  <img width="570" src ="./screen/form-demo.gif">
+  <img width="570" src ="./screen/form-demo.png">
 </p>
 
 
@@ -31,12 +31,20 @@ First you need to set up the form `stepsDescription`, `formSubtitle`, `formTitle
     formMethodType : 'POST',
     prevMessageText : 'Previous',
     nextMessageText : 'Next',
-     formActionURL:'/',
+    formActionURL:'/',
+    formID : 's-multistep-form',
+    displayIndex : true,
+    svgCircleColor : "#48DB71",
+    selectCircleColor : "red",
+    selectboxShadowCircleColor :  "#48DB71",
+    unselectboxShadowCircleColor : "#48DB71",
+    indexblanckColor : 'black',
+    indexColor : 'black',
     stepsDescription: [
       { title: "STEP 1", subtitle: "All the details to perform on this step" },
       { title: "STEP 2", subtitle: "All the details to perform on this step" }
     ]
-  };
+  }
 ```
 
 After that you only need to call `Form` and `Step` component in the following way
@@ -49,6 +57,8 @@ After that you only need to call `Form` and `Step` component in the following wa
 </Form>
 ```
 
+You can customize the form using CSS as you want it. :) 
+
 ## Submit form data
 
 ```html
@@ -56,13 +66,21 @@ After that you only need to call `Form` and `Step` component in the following wa
 import axios from "axios";
 import { Form, Step } from "svelte-advanced-multistep-form";
 
-let multiStepOptions = {
+llet multiStepOptions = {
     formTitle : 'Hello world',
     formSubtitle : 'Welcome to our world',
     formMethodType : 'POST',
     prevMessageText : 'Previous',
     nextMessageText : 'Next',
     formActionURL:'/',
+    formID : 's-multistep-form',
+    displayIndex : true,
+    svgCircleColor : "#48DB71",
+    selectCircleColor : "red",
+    selectboxShadowCircleColor :  "#48DB71",
+    unselectboxShadowCircleColor : "#48DB71",
+    indexblanckColor : 'black',
+    indexColor : 'black',
     stepsDescription: [
       { title: "STEP 1", subtitle: "All the details to perform on this step" },
       { title: "STEP 2", subtitle: "All the details to perform on this step" }
