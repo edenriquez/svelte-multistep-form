@@ -11,13 +11,15 @@
   export let multiStepOptions;
   export let resetSteps;
 
-  multiStepOptions = {
+  let defaultStepOptions = {
     formTitle : 'Hello world',
     formSubtitle : 'Welcome to our world',
     formMethodType : 'POST',
     prevMessageText : 'Previous',
     nextMessageText : 'Next'
   }
+
+  multiStepOptions = Object.assign({}, defaultStepOptions,  multiStepOptions)
 
   /*
   Lifecycle Hooks
