@@ -22,12 +22,15 @@ then import into your code
 ```
 ## Usage
 
-First you need to set up the form `stepsDescription`, `formSubtitle` and `formTitle` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}>`
+First you need to set up the form `stepsDescription`, `formSubtitle`, `formTitle`, `formMethodType`, `prevMessageText` and `nextMessageText` inside `multiStepOptions` that later has to be injected into Form component `<Form {multiStepOptions}>`
 
 ```javascript
-let multiStepOptions = {
-    formTitle: "New Title ✍️",
-    formSubtitle: "Subtitle should be here",
+  let multiStepOptions = {
+    formTitle : 'Hello world',
+    formSubtitle : 'Welcome to our world',
+    formMethodType : 'POST',
+    prevMessageText : 'Previous',
+    nextMessageText : 'Next',
     stepsDescription: [
       { title: "STEP 1", subtitle: "All the details to perform on this step" },
       { title: "STEP 2", subtitle: "All the details to perform on this step" }
@@ -53,13 +56,16 @@ import axios from "axios";
 import { Form, Step } from "svelte-multistep-form";
 
 let multiStepOptions = {
-  formTitle: "New Title ✍️",
-  formSubtitle: "Subtitle should be here",
-  stepsDescription: [
-    { title: "Input step", subtitle: "Input to fulfill" },
-    { title: "Submit", subtitle: "Save!" },
-  ]
-};
+    formTitle : 'Hello world',
+    formSubtitle : 'Welcome to our world',
+    formMethodType : 'POST',
+    prevMessageText : 'Previous',
+    nextMessageText : 'Next',
+    stepsDescription: [
+      { title: "STEP 1", subtitle: "All the details to perform on this step" },
+      { title: "STEP 2", subtitle: "All the details to perform on this step" }
+    ]
+  };
 let myInputValue; 
 
 const handleSubmit = () => {
