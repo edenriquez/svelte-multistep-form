@@ -31,5 +31,8 @@
   },
   "bugs": {
     "url": "https://github.com/homescriptone/svelte-advanced-multistep-form/issues"
+  },
+  "dependencies": {
+    "font-awesome": "^4.7.0"
   }
 }
