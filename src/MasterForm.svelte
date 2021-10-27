@@ -239,6 +239,17 @@
     action="{multiStepOptions.formActionURL}">
     <div class="multistep-left-sidebar">
       {#each multiStepOptions.stepsDescription as step}
+          <div class="multistep-icon">
+        
+            {#if $currentStep === index}
+            <i class='{step.icon} multistep-minimalist-icon' style="font-size:24px; padding:2px; background-color:{multiStepOptions.iconselectedColor}; color:white; border-radius:3px;"></i>
+            {:else if $currentStep > index }
+            <i class='{step.icon} multistep-minimalist-icon' style="font-size:24px; padding:2px; background-color:{multiStepOptions.iconprevselectedColor}; color:white; border-radius:3px;"></i>
+            {:else if  $currentStep < index }
+            <i class='{step.icon} multistep-minimalist-icon' style="font-size:24px;"></i>
+            {/if}
+            
+          </div>
         <div class="multistep-title-side">
           <span class="name"><pre>{step.title}</pre></span>
           <span class="subtitle"><pre>{step.subtitle}</pre></span>
