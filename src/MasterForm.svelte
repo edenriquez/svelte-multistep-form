@@ -278,8 +278,8 @@
     <!-- end of  StepForm  -->
   </form>
   <div class="multistep-continue-button">
-    <span on:click={previousStep} id="multistep-prev">{multiStepOptions.prevMessageText}</span>
+    <span on:click={previousStep} id="multistep-prev">{@html multiStepOptions.prevMessageText}</span>
     |
-    <span on:click={nextStep} id="multistep-next">{multiStepOptions.nextMessageText}</span>
+    <span on:click={nextStep} id="multistep-next">{@html multiStepOptions.nextMessageText}</span>
   </div>
 </div>
