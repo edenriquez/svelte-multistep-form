@@ -91,6 +91,7 @@
 </script>
 
 <style>
+  @import url('../node_modules/font-awesome/css/font-awesome.min.css');
   .name {
     color: #848383;
   }
