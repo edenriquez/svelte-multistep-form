@@ -3,7 +3,7 @@
   "main": "public/build/bundle.js",
   "module": "public/build/bundle.mjs",
   "svelte": "src/index.js",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
@@ -31,5 +31,8 @@
   },
   "bugs": {
     "url": "https://github.com/homescriptone/svelte-advanced-multistep-form/issues"
+  },
+  "dependencies": {
+    "font-awesome": "^4.7.0"
   }
 }

@@ -1,6 +1,11 @@
 <script>
-  import { onMount, afterUpdate } from "svelte";
-  import { currentStep } from "./stores.js";
+  import {
+    onMount,
+    afterUpdate
+  } from "svelte";
+  import {
+    currentStep
+  } from "./stores.js";
   import {
     uuidv4,
     formHasError,
@@ -8,31 +13,43 @@
     updateButtonVisibility
   } from "./helpers.js";
 
+
+
   export let multiStepOptions;
   export let resetSteps;
 
   let defaultStepOptions = {
-    formTitle : 'Hello world',
-    formSubtitle : 'Welcome to our world',
-    formMethodType : 'POST',
-    prevMessageText : 'Previous',
-    nextMessageText : 'Next',
-    formActionURL:'/',
-    formID : 's-multistep-form',
-    displayIndex : true,
-    svgCircleColor : "#48DB71",
-    selectCircleColor : "red",
-    selectboxShadowCircleColor :  "#48DB71",
-    unselectboxShadowCircleColor : "#48DB71",
-    indexblanckColor : 'black',
-    indexColor : 'black',
-    stepsDescription: [
-      { title: "STEP 1", subtitle: "All the details to perform on this step" },
-      { title: "STEP 2", subtitle: "All the details to perform on this step" }
+    formTitle: 'Hello world',
+    formSubtitle: 'Welcome to our world',
+    formMethodType: 'POST',
+    prevMessageText: 'Previous',
+    nextMessageText: 'Next',
+    formActionURL: '/',
+    formID: 's-multistep-form',
+    displayIndex: true,
+    svgCircleColor: "#48DB71",
+    selectCircleColor: "red",
+    selectboxShadowCircleColor: "#48DB71",
+    unselectboxShadowCircleColor: "#48DB71",
+    indexblanckColor: 'black',
+    indexColor: 'black',
+    prevselectBackgroundColor : 'red',
+    iconselectedColor : "orange",
+    iconprevselectedColor : 'green',
+    stepsDescription: [{
+        title: "STEP 1",
+        subtitle: "All the details to perform on this step",
+        icon : "fa fa-info-circle"
+      },
+      {
+        title: "STEP 2",
+        subtitle: "All the details to perform on this step",
+        icon : "fa fa-info-circle"
+      }
     ]
   }
 
-  multiStepOptions = Object.assign({}, defaultStepOptions,  multiStepOptions)
+  multiStepOptions = Object.assign({}, defaultStepOptions, multiStepOptions)
 
   /*
   Lifecycle Hooks
@@ -48,7 +65,7 @@
         step.classList.add("step-is-active");
       }
     });
-    
+
     updateButtonVisibility();
   });
 
@@ -77,30 +94,34 @@
       updateStepStatus(currentStep.decrement);
     }
   };
+
 </script>
 
 <style>
+  @import url('../node_modules/font-awesome/css/font-awesome.min.css');
   .name {
     color: #848383;
   }
+
   .subtitle {
     color: rgb(223, 219, 219);
     display: block;
   }
+
   .multistep-form {
     display: flex;
   }
+
   .separator,
   .multistep-left-sidebar {
     flex: 1;
   }
+
   .multistep-right-sidebar {
     flex: 3;
     text-align: left;
   }
-  .multistep-continue-button {
-    float: right;
-  }
+
   .separator-check {
     width: 15px;
     height: 20px;
@@ -110,6 +131,7 @@
     padding: 11px 10px 2px;
     z-index: 10;
   }
+
   .separator-check-pending {
     width: 15px;
     height: 20px;
@@ -119,6 +141,7 @@
     padding: 11px 10px 2px;
     z-index: 10;
   }
+
   .separator-check-current {
     width: 15px;
     height: 20px;
@@ -129,36 +152,44 @@
     z-index: 10;
     box-shadow: 0px 1px 8px #5e40db;
   }
+
   .separator-check-number {
     color: white;
     text-align: center;
     margin-top: -3px;
   }
+
   .separator-check-number-blank {
     text-align: center;
     margin-top: -3px;
   }
+
   .separator-line {
     border-right: 2px solid #ccc;
     margin: 0 auto;
     position: relative;
-    height: 40px; /* placeholder, should be displayed dynamically*/
+    height: 40px;
+    /* placeholder, should be displayed dynamically*/
     width: 1px;
     margin-bottom: 2px;
     margin-top: 2px;
   }
+
   .multistep-master-form {
     padding: 30px;
     height: 100%;
   }
+
   #multistep-prev {
     cursor: pointer;
     margin-right: 20px;
   }
+
   #multistep-next {
     cursor: pointer;
     margin-left: 20px;
   }
+
   .dot {
     height: 8px;
     width: 8px;
@@ -168,21 +199,25 @@
     margin-left: -2px;
     margin-top: 18px;
   }
+
   .multistep-title-side {
     margin-top: 40px;
     text-align: right;
   }
+
   .multistep-form-title {
     text-align: left;
     color: #636262;
     font-weight: bold;
   }
+
   .multistep-form-subtitle {
     text-align: left;
     color: rgb(223, 219, 219);
     margin-bottom: 30px;
     font-weight: lighter;
   }
+
   #multistep-error-messages {
     position: absolute;
     right: 0;
@@ -196,18 +231,98 @@
     opacity: 0;
     transition: visibility 0s, opacity 0.2s linear;
   }
+  div.multistep-icon
+  {
+    display: none;
+  }
+
+  div.multistep-continue-button{
+      text-align: center !important;
+      /* margin-top: 15px;
+      margin-bottom: 15px; */
+      margin-left: 250px;
+      margin-top: 30px;
+    }
+
+  /* @todo put back max-device-width when done testing!!! */
+ 
+  @media screen and (max-width: 768px) {
+      /* place here CSS targeted at iPhones and smaller screen sizes, not iPads */
+    div.multistep-title-side{
+      display:none;
+    }
+
+    form.multistep-form {
+      display:inherit;
+    }
+
+
+    div.multistep-icon{
+      display: inline;
+      
+    }
+
+    div.separator{
+      display:none;
+    }
+
+    div.multistep-left-sidebar div{
+      margin-right: 15px;
+    }
+
+    div.multistep-left-sidebar{
+      margin-bottom: 20px;
+    }
+
+    div.multistep-continue-button{
+      float:unset;
+      text-align: right !important;
+      margin-top: 15px;
+      margin-bottom: 15px;
+      margin-left: unset;
+    }
+  
+  }
+
+  div.multistep-master-form{
+    padding :unset;
+    margin-top: 30px;
+    margin-bottom: 30px;
+
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+
 </style>
 
 <div class="multistep-master-form">
   <div id="multistep-error-messages" />
-  <h1 class="multistep-form-title">{multiStepOptions.formTitle}</h1>
-  <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle}</h5>
-  <form class="multistep-form" id="{multiStepOptions.formID}" method="{multiStepOptions.formMethodType}" action="{multiStepOptions.formActionURL}">
+  <h1 class="multistep-form-title">{ multiStepOptions.formTitle ? multiStepOptions.formTitle   : "" }</h1>
+  <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle ? multiStepOptions.formSubtitle   : "" }</h5>
+  <form class="multistep-form" id="{multiStepOptions.formID}" method="{multiStepOptions.formMethodType}"
+    action="{multiStepOptions.formActionURL}">
     <div class="multistep-left-sidebar">
-      {#each multiStepOptions.stepsDescription as step}
+      {#each multiStepOptions.stepsDescription as step, index}
+        {#if step.icon }
+          <div class="multistep-icon">
+        
+            {#if $currentStep === index}
+            <i class='{step.icon} multistep-minimalist-icon' style="font-size:24px; padding:2px; background-color:{multiStepOptions.iconselectedColor}; color:white; border-radius:3px;"></i>
+            {:else if $currentStep > index }
+            <i class='{step.icon} multistep-minimalist-icon' style="font-size:24px; padding:2px; background-color:{multiStepOptions.iconprevselectedColor}; color:white; border-radius:3px;"></i>
+            {:else if  $currentStep < index }
+            <i class='{step.icon} multistep-minimalist-icon' style="font-size:24px;"></i>
+            {/if}
+            
+          </div>
+        {/if}
         <div class="multistep-title-side">
-          <span class="name"><pre>{step.title}</pre></span>
-          <span class="subtitle"><pre>{step.subtitle}</pre></span>
+          {#if step.title }
+            <span class="name"><pre>{@html step.title}</pre></span>
+          {/if}
+          {#if step.subtitle }
+          <span class="subtitle"><pre>{ @html step.subtitle }</pre></span>
+          {/if}
         </div>
       {/each}
     </div>
@@ -217,19 +332,19 @@
           <span class="dot" />
         </div>
         {#if $currentStep === index}
-          <div class="separator-check-current" style="background: {multiStepOptions.selectCircleColor}; box-shadow:  0px 1px 8px {multiStepOptions.selectboxShadowCircleColor}">
+          <div class="separator-check-current" style="background: {multiStepOptions.selectCircleColor}; box-shadow: {multiStepOptions.selectboxShadowCircleColor} 0px 1px 8px ">
             {#if multiStepOptions.displayIndex }
               <div class="separator-check-number" style="color: {multiStepOptions.indexColor}">{index + 1}</div>
             {/if}
           </div>
         {:else if $currentStep > index}
-          <div class="separator-check">
+          <div class="separator-check" style="background-color: {multiStepOptions.prevselectBackgroundColor};">
               <svg viewBox="0 0 32 32" style="fill: {multiStepOptions.svgCircleColor}">
                 <path d="M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z" />
               </svg>
           </div>
         {:else if $currentStep < index}
-          <div class="separator-check-pending" style=" box-shadow:  0px 1px 8px {multiStepOptions.unselectboxShadowCircleColor}">
+          <div class="separator-check-pending" style=" box-shadow: {multiStepOptions.unselectboxShadowCircleColor} 0px 1px 8px ">
             {#if multiStepOptions.displayIndex }
               <div class="separator-check-number-blank" style="color: {multiStepOptions.indexblanckColor}">{index + 1}</div>
             {/if}
@@ -244,8 +359,8 @@
     <!-- end of  StepForm  -->
   </form>
   <div class="multistep-continue-button">
-    <span on:click={previousStep} id="multistep-prev">{multiStepOptions.prevMessageText}</span>
+    <span on:click={previousStep} id="multistep-prev">{@html multiStepOptions.prevMessageText}</span>
     |
-    <span on:click={nextStep} id="multistep-next">{multiStepOptions.nextMessageText}</span>
+    <span on:click={nextStep} id="multistep-next">{@html multiStepOptions.nextMessageText}</span>
   </div>
 </div>
