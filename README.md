@@ -40,14 +40,23 @@ First you need to set up the form `stepsDescription`, `formSubtitle`, `formTitle
     unselectboxShadowCircleColor : "#48DB71",
     indexblanckColor : 'black',
     indexColor : 'black',
-    stepsDescription: [
-      { title: "STEP 1", subtitle: "All the details to perform on this step" },
-      { title: "STEP 2", subtitle: "All the details to perform on this step" }
+    stepsDescription: [{
+        title: "STEP 1",
+        subtitle: "All the details to perform on this step",
+        icon : "fa fa-info-circle"
+      },
+      {
+        title: "STEP 2",
+        subtitle: "All the details to perform on this step",
+        icon : "fa fa-info-circle"
+      }
     ]
   }
 ```
 
 After that you only need to call `Form` and `Step` component in the following way
+
+For `Step`you can use Font-Awesome icons.
 
 ```html
 <Form {multiStepOptions}>
@@ -70,8 +79,8 @@ llet multiStepOptions = {
     formTitle : 'Hello world',
     formSubtitle : 'Welcome to our world',
     formMethodType : 'POST',
-    prevMessageText : 'Previous',
-    nextMessageText : 'Next',
+    prevMessageText : '<button>Previous<button>',
+    nextMessageText : '<button>Next</button>',
     formActionURL:'/',
     formID : 's-multistep-form',
     displayIndex : true,
@@ -81,9 +90,16 @@ llet multiStepOptions = {
     unselectboxShadowCircleColor : "#48DB71",
     indexblanckColor : 'black',
     indexColor : 'black',
-    stepsDescription: [
-      { title: "STEP 1", subtitle: "All the details to perform on this step" },
-      { title: "STEP 2", subtitle: "All the details to perform on this step" }
+    stepsDescription: [{
+        title: "STEP 1",
+        subtitle: "All the details to perform on this step",
+        icon : "fa fa-info-circle"
+      },
+      {
+        title: "STEP 2",
+        subtitle: "All the details to perform on this step",
+        icon : "fa fa-info-circle"
+      }
     ]
   };
 let myInputValue; 
