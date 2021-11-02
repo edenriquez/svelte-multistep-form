@@ -3,7 +3,7 @@
   "main": "public/build/bundle.js",
   "module": "public/build/bundle.mjs",
   "svelte": "src/index.js",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
