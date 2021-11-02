@@ -1,5 +1,5 @@
 
-(function(l, r) { if (l.getElementById('livereloadscript')) return; r = l.createElement('script'); r.async = 1; r.src = '//' + (window.location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1'; r.id = 'livereloadscript'; l.getElementsByTagName('head')[0].appendChild(r) })(window.document);
+(function(l, r) { if (!l || l.getElementById('livereloadscript')) return; r = l.createElement('script'); r.async = 1; r.src = '//' + (self.location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1'; r.id = 'livereloadscript'; l.getElementsByTagName('head')[0].appendChild(r) })(self.document);
 var app = (function () {
     'use strict';
 
@@ -33,6 +33,21 @@ var app = (function () {
     function is_empty(obj) {
         return Object.keys(obj).length === 0;
     }
+    function validate_store(store, name) {
+        if (store != null && typeof store.subscribe !== 'function') {
+            throw new Error(`'${name}' is not a store with a 'subscribe' method`);
+        }
+    }
+    function subscribe(store, ...callbacks) {
+        if (store == null) {
+            return noop;
+        }
+        const unsub = store.subscribe(...callbacks);
+        return unsub.unsubscribe ? () => unsub.unsubscribe() : unsub;
+    }
+    function component_subscribe(component, store, callback) {
+        component.$$.on_destroy.push(subscribe(store, callback));
+    }
     function create_slot(definition, ctx, $$scope, fn) {
         if (definition) {
             const slot_ctx = get_slot_context(definition, ctx, $$scope, fn);
@@ -62,14 +77,23 @@ var app = (function () {
         }
         return $$scope.dirty;
     }
-    function update_slot(slot, slot_definition, ctx, $$scope, dirty, get_slot_changes_fn, get_slot_context_fn) {
-        const slot_changes = get_slot_changes(slot_definition, $$scope, dirty, get_slot_changes_fn);
+    function update_slot_base(slot, slot_definition, ctx, $$scope, slot_changes, get_slot_context_fn) {
         if (slot_changes) {
             const slot_context = get_slot_context(slot_definition, ctx, $$scope, get_slot_context_fn);
             slot.p(slot_context, slot_changes);
         }
     }
-
+    function get_all_dirty_from_scope($$scope) {
+        if ($$scope.ctx.length > 32) {
+            const dirty = [];
+            const length = $$scope.ctx.length / 32;
+            for (let i = 0; i < length; i++) {
+                dirty[i] = -1;
+            }
+            return dirty;
+        }
+        return -1;
+    }
     function append(target, node) {
         target.appendChild(node);
     }
@@ -104,6 +128,13 @@ var app = (function () {
         node.addEventListener(event, handler, options);
         return () => node.removeEventListener(event, handler, options);
     }
+    function prevent_default(fn) {
+        return function (event) {
+            event.preventDefault();
+            // @ts-ignore
+            return fn.call(this, event);
+        };
+    }
     function attr(node, attribute, value) {
         if (value == null)
             node.removeAttribute(attribute);
@@ -127,14 +158,15 @@ var app = (function () {
                 return;
             }
         }
+        select.selectedIndex = -1; // no option should be selected
     }
     function select_value(select) {
         const selected_option = select.querySelector(':checked') || select.options[0];
         return selected_option && selected_option.__value;
     }
-    function custom_event(type, detail) {
+    function custom_event(type, detail, bubbles = false) {
         const e = document.createEvent('CustomEvent');
-        e.initCustomEvent(type, false, false, detail);
+        e.initCustomEvent(type, bubbles, false, detail);
         return e;
     }
 
@@ -255,22 +287,24 @@ var app = (function () {
     function create_component(block) {
         block && block.c();
     }
-    function mount_component(component, target, anchor) {
+    function mount_component(component, target, anchor, customElement) {
         const { fragment, on_mount, on_destroy, after_update } = component.$$;
         fragment && fragment.m(target, anchor);
-        // onMount happens before the initial afterUpdate
-        add_render_callback(() => {
-            const new_on_destroy = on_mount.map(run).filter(is_function);
-            if (on_destroy) {
-                on_destroy.push(...new_on_destroy);
-            }
-            else {
-                // Edge case - component was destroyed immediately,
-                // most likely as a result of a binding initialising
-                run_all(new_on_destroy);
-            }
-            component.$$.on_mount = [];
-        });
+        if (!customElement) {
+            // onMount happens before the initial afterUpdate
+            add_render_callback(() => {
+                const new_on_destroy = on_mount.map(run).filter(is_function);
+                if (on_destroy) {
+                    on_destroy.push(...new_on_destroy);
+                }
+                else {
+                    // Edge case - component was destroyed immediately,
+                    // most likely as a result of a binding initialising
+                    run_all(new_on_destroy);
+                }
+                component.$$.on_mount = [];
+            });
+        }
         after_update.forEach(add_render_callback);
     }
     function destroy_component(component, detaching) {
@@ -292,10 +326,9 @@ var app = (function () {
         }
         component.$$.dirty[(i / 31) | 0] |= (1 << (i % 31));
     }
-    function init(component, options, instance, create_fragment, not_equal, props, dirty = [-1]) {
+    function init(component, options, instance, create_fragment, not_equal, props, append_styles, dirty = [-1]) {
         const parent_component = current_component;
         set_current_component(component);
-        const prop_values = options.props || {};
         const $$ = component.$$ = {
             fragment: null,
             ctx: null,
@@ -307,17 +340,20 @@ var app = (function () {
             // lifecycle
             on_mount: [],
             on_destroy: [],
+            on_disconnect: [],
             before_update: [],
             after_update: [],
-            context: new Map(parent_component ? parent_component.$$.context : []),
+            context: new Map(options.context || (parent_component ? parent_component.$$.context : [])),
             // everything else
             callbacks: blank_object(),
             dirty,
-            skip_bound: false
+            skip_bound: false,
+            root: options.target || parent_component.$$.root
         };
+        append_styles && append_styles($$.root);
         let ready = false;
         $$.ctx = instance
-            ? instance(component, prop_values, (i, ret, ...rest) => {
+            ? instance(component, options.props || {}, (i, ret, ...rest) => {
                 const value = rest.length ? rest[0] : ret;
                 if ($$.ctx && not_equal($$.ctx[i], $$.ctx[i] = value)) {
                     if (!$$.skip_bound && $$.bound[i])
@@ -346,11 +382,14 @@ var app = (function () {
             }
             if (options.intro)
                 transition_in(component.$$.fragment);
-            mount_component(component, options.target, options.anchor);
+            mount_component(component, options.target, options.anchor, options.customElement);
             flush();
         }
         set_current_component(parent_component);
     }
+    /**
+     * Base class for Svelte components. Used when dev=false.
+     */
     class SvelteComponent {
         $destroy() {
             destroy_component(this, 1);
@@ -375,7 +414,7 @@ var app = (function () {
     }
 
     function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.29.4' }, detail)));
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.44.1' }, detail), true));
     }
     function append_dev(target, node) {
         dispatch_dev('SvelteDOMInsert', { target, node });
@@ -409,6 +448,10 @@ var app = (function () {
         else
             dispatch_dev('SvelteDOMSetAttribute', { node, attribute, value });
     }
+    function prop_dev(node, property, value) {
+        node[property] = value;
+        dispatch_dev('SvelteDOMSetProperty', { node, property, value });
+    }
     function set_data_dev(text, data) {
         data = '' + data;
         if (text.wholeText === data)
@@ -432,6 +475,9 @@ var app = (function () {
             }
         }
     }
+    /**
+     * Base class for Svelte components with some minor dev-enhancements. Used when dev=true.
+     */
     class SvelteComponentDev extends SvelteComponent {
         constructor(options) {
             if (!options || (!options.target && !options.$$inline)) {
@@ -449,11 +495,11 @@ var app = (function () {
         $inject_state() { }
     }
 
-    /* node_modules/svelte-multistep-form/src/StepForm.svelte generated by Svelte v3.29.4 */
+    /* Users/eduardoguruhotel/dev/svelte-multistep-form/src/StepForm.svelte generated by Svelte v3.44.1 */
 
-    const file = "node_modules/svelte-multistep-form/src/StepForm.svelte";
+    const file$2 = "Users/eduardoguruhotel/dev/svelte-multistep-form/src/StepForm.svelte";
 
-    function create_fragment(ctx) {
+    function create_fragment$2(ctx) {
     	let div;
     	let current;
     	const default_slot_template = /*#slots*/ ctx[1].default;
@@ -464,7 +510,7 @@ var app = (function () {
     			div = element("div");
     			if (default_slot) default_slot.c();
     			attr_dev(div, "class", "step step-not-active svelte-cj6jwx");
-    			add_location(div, file, 9, 0, 106);
+    			add_location(div, file$2, 9, 0, 106);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -480,8 +526,17 @@ var app = (function () {
     		},
     		p: function update(ctx, [dirty]) {
     			if (default_slot) {
-    				if (default_slot.p && dirty & /*$$scope*/ 1) {
-    					update_slot(default_slot, default_slot_template, ctx, /*$$scope*/ ctx[0], dirty, null, null);
+    				if (default_slot.p && (!current || dirty & /*$$scope*/ 1)) {
+    					update_slot_base(
+    						default_slot,
+    						default_slot_template,
+    						ctx,
+    						/*$$scope*/ ctx[0],
+    						!current
+    						? get_all_dirty_from_scope(/*$$scope*/ ctx[0])
+    						: get_slot_changes(default_slot_template, /*$$scope*/ ctx[0], dirty, null),
+    						null
+    					);
     				}
     			}
     		},
@@ -502,7 +557,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment.name,
+    		id: create_fragment$2.name,
     		type: "component",
     		source: "",
     		ctx
@@ -511,17 +566,17 @@ var app = (function () {
     	return block;
     }
 
-    function instance($$self, $$props, $$invalidate) {
+    function instance$2($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots("StepForm", slots, ['default']);
+    	validate_slots('StepForm', slots, ['default']);
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<StepForm> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<StepForm> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
-    		if ("$$scope" in $$props) $$invalidate(0, $$scope = $$props.$$scope);
+    		if ('$$scope' in $$props) $$invalidate(0, $$scope = $$props.$$scope);
     	};
 
     	return [$$scope, slots];
@@ -530,42 +585,213 @@ var app = (function () {
     class StepForm extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance, create_fragment, safe_not_equal, {});
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "StepForm",
     			options,
-    			id: create_fragment.name
+    			id: create_fragment$2.name
     		});
     	}
     }
 
-    /* node_modules/svelte-multistep-form/src/MasterForm.svelte generated by Svelte v3.29.4 */
-    const file$1 = "node_modules/svelte-multistep-form/src/MasterForm.svelte";
+    const subscriber_queue = [];
+    /**
+     * Create a `Writable` store that allows both updating and reading by subscription.
+     * @param {*=}value initial value
+     * @param {StartStopNotifier=}start start and stop notifications for subscriptions
+     */
+    function writable(value, start = noop) {
+        let stop;
+        const subscribers = new Set();
+        function set(new_value) {
+            if (safe_not_equal(value, new_value)) {
+                value = new_value;
+                if (stop) { // store is ready
+                    const run_queue = !subscriber_queue.length;
+                    for (const subscriber of subscribers) {
+                        subscriber[1]();
+                        subscriber_queue.push(subscriber, value);
+                    }
+                    if (run_queue) {
+                        for (let i = 0; i < subscriber_queue.length; i += 2) {
+                            subscriber_queue[i][0](subscriber_queue[i + 1]);
+                        }
+                        subscriber_queue.length = 0;
+                    }
+                }
+            }
+        }
+        function update(fn) {
+            set(fn(value));
+        }
+        function subscribe(run, invalidate = noop) {
+            const subscriber = [run, invalidate];
+            subscribers.add(subscriber);
+            if (subscribers.size === 1) {
+                stop = start(set) || noop;
+            }
+            run(value);
+            return () => {
+                subscribers.delete(subscriber);
+                if (subscribers.size === 0) {
+                    stop();
+                    stop = null;
+                }
+            };
+        }
+        return { set, update, subscribe };
+    }
 
-    function get_each_context(ctx, list, i) {
+    const store = writable(0);
+
+    const currentStep = {
+      subscribe: store.subscribe,
+      increment: () => store.update(val => val + 1),
+      decrement: () => store.update(val => val - 1),
+      reset: () => store.update(val => 0),
+    };
+
+    const UUID_PATTERN = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+    const ERROR_DISPLAY_TIME = 3000;
+    const BUTTON_OPACITY = "1";
+    const BUTTON_DISABLED_OPACITY = "0.5";
+
+    let activeStep;
+    currentStep.subscribe((value) => {
+      activeStep = value;
+    });
+
+    const formHasError = () => {
+      const steps = document.querySelectorAll(".step");
+      const step = steps[activeStep];
+
+      const requiredFields = step.querySelectorAll("[required]");
+      let hasError = false;
+      let errorMessages = [];
+
+      requiredFields.forEach((el) => {
+        if (!el.checkValidity()) {
+          hasError = true;
+          errorMessages.push(el.dataset.multistepErrorMessage);
+        }
+      });
+
+      if (hasError) {
+        showError(errorMessages);
+      }
+      return hasError;
+    };
+
+    const showError = (errorMessages) => {
+      let errorField = document.querySelector("#multistep-error-messages");
+
+      deleteChildNodes(errorField);
+      showOrHide(errorField, "visible");
+
+      errorMessages.forEach((message) => {
+        createElementAppendTo("p", message, errorField);
+      });
+
+      setTimeout(() => {
+        showOrHide(errorField, "hidden");
+      }, ERROR_DISPLAY_TIME);
+    };
+
+
+    const updateStepStatus = (operation) => {
+      if (!operation) return;
+      const steps = document.querySelectorAll(".step");
+
+      steps[activeStep].classList.remove("step-is-active");
+      steps[activeStep].classList.add("step-not-active");
+
+      operation();
+
+      steps[activeStep].classList.remove("step-not-active");
+      steps[activeStep].classList.add("step-is-active");
+
+      updateButtonVisibility();
+    };
+
+    const updateButtonVisibility = () => {
+      const steps = document.querySelectorAll(".step");
+      const stepsLength = steps.length;
+      
+      const prev = document.querySelector("#multistep-prev");
+      const next = document.querySelector("#multistep-next");
+
+      prev.style.opacity = BUTTON_OPACITY;
+      next.style.opacity = BUTTON_OPACITY;
+
+      if (activeStep == 0) {
+        prev.style.opacity = BUTTON_DISABLED_OPACITY;
+      }
+      if (activeStep == stepsLength - 1) {
+        next.style.opacity = BUTTON_DISABLED_OPACITY;
+      }
+    };
+
+    const showOrHide = (el, status) => {
+      if (!el) return;
+
+      const statusOptions = {
+        hidden: BUTTON_DISABLED_OPACITY,
+        visible: BUTTON_OPACITY,
+      };
+
+      el.style.visibility = statusOptions[status] ? status : null;
+      el.style.opacity = statusOptions[status] ? statusOptions[status] : null;
+    };
+
+    // TODO: think about it if this is nedeed or useless
+    const uuidv4 = () => {
+      return UUID_PATTERN.replace(/[xy]/g, function (c) {
+        let r = (Math.random() * 16) | 0,
+          v = c == "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    };
+
+    const deleteChildNodes = (el) => {
+      while (el.firstChild) {
+        el.removeChild(el.firstChild);
+      }
+    };
+
+    const createElementAppendTo = (type, content, target) => {
+      let el = document.createElement(type);
+      el.innerHTML = content;
+      target.appendChild(el);
+    };
+
+    /* Users/eduardoguruhotel/dev/svelte-multistep-form/src/MasterForm.svelte generated by Svelte v3.44.1 */
+
+    const file$1 = "Users/eduardoguruhotel/dev/svelte-multistep-form/src/MasterForm.svelte";
+
+    function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[13] = list[i];
-    	child_ctx[15] = i;
+    	child_ctx[7] = list[i];
+    	child_ctx[9] = i;
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[13] = list[i];
+    	child_ctx[7] = list[i];
     	return child_ctx;
     }
 
-    // (251:6) {#each multiStepOptions.stepsDescription as step}
+    // (64:6) {#each multiStepOptions.stepsDescription as step}
     function create_each_block_1(ctx) {
     	let div;
     	let span0;
-    	let t0_value = /*step*/ ctx[13].title + "";
+    	let t0_value = /*step*/ ctx[7].title + "";
     	let t0;
     	let t1;
     	let span1;
-    	let t2_value = /*step*/ ctx[13].subtitle + "";
+    	let t2_value = /*step*/ ctx[7].subtitle + "";
     	let t2;
     	let t3;
 
@@ -579,11 +805,11 @@ var app = (function () {
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(span0, "class", "name svelte-1squrb9");
-    			add_location(span0, file$1, 252, 10, 6433);
+    			add_location(span0, file$1, 65, 10, 1620);
     			attr_dev(span1, "class", "subtitle svelte-1squrb9");
-    			add_location(span1, file$1, 253, 10, 6482);
+    			add_location(span1, file$1, 66, 10, 1669);
     			attr_dev(div, "class", "multistep-title-side svelte-1squrb9");
-    			add_location(div, file$1, 251, 8, 6388);
+    			add_location(div, file$1, 64, 8, 1575);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -595,8 +821,8 @@ var app = (function () {
     			append_dev(div, t3);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*multiStepOptions*/ 1 && t0_value !== (t0_value = /*step*/ ctx[13].title + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*multiStepOptions*/ 1 && t2_value !== (t2_value = /*step*/ ctx[13].subtitle + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*multiStepOptions*/ 1 && t0_value !== (t0_value = /*step*/ ctx[7].title + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*multiStepOptions*/ 1 && t2_value !== (t2_value = /*step*/ ctx[7].subtitle + "")) set_data_dev(t2, t2_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div);
@@ -607,18 +833,18 @@ var app = (function () {
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(251:6) {#each multiStepOptions.stepsDescription as step}",
+    		source: "(64:6) {#each multiStepOptions.stepsDescription as step}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (273:38) 
+    // (86:39) 
     function create_if_block_2(ctx) {
     	let div1;
     	let div0;
-    	let t0_value = /*index*/ ctx[15] + 1 + "";
+    	let t0_value = /*index*/ ctx[9] + 1 + "";
     	let t0;
     	let t1;
 
@@ -629,9 +855,9 @@ var app = (function () {
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(div0, "class", "separator-check-number-blank svelte-1squrb9");
-    			add_location(div0, file$1, 274, 12, 7249);
+    			add_location(div0, file$1, 87, 12, 2439);
     			attr_dev(div1, "class", "separator-check-pending svelte-1squrb9");
-    			add_location(div1, file$1, 273, 10, 7199);
+    			add_location(div1, file$1, 86, 10, 2389);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -648,14 +874,14 @@ var app = (function () {
     		block,
     		id: create_if_block_2.name,
     		type: "if",
-    		source: "(273:38) ",
+    		source: "(86:39) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (267:38) 
+    // (80:39) 
     function create_if_block_1(ctx) {
     	let div;
     	let svg;
@@ -669,12 +895,12 @@ var app = (function () {
     			path = svg_element("path");
     			t = space();
     			attr_dev(path, "d", "M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z");
-    			add_location(path, file$1, 269, 14, 7061);
+    			add_location(path, file$1, 82, 14, 2250);
     			attr_dev(svg, "viewBox", "0 0 32 32");
     			set_style(svg, "fill", "#48DB71");
-    			add_location(svg, file$1, 268, 12, 7000);
+    			add_location(svg, file$1, 81, 12, 2189);
     			attr_dev(div, "class", "separator-check svelte-1squrb9");
-    			add_location(div, file$1, 267, 10, 6958);
+    			add_location(div, file$1, 80, 10, 2147);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -691,18 +917,18 @@ var app = (function () {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(267:38) ",
+    		source: "(80:39) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (263:8) {#if currentStep === index}
+    // (76:8) {#if $currentStep === index}
     function create_if_block(ctx) {
     	let div1;
     	let div0;
-    	let t0_value = /*index*/ ctx[15] + 1 + "";
+    	let t0_value = /*index*/ ctx[9] + 1 + "";
     	let t0;
     	let t1;
 
@@ -713,9 +939,9 @@ var app = (function () {
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(div0, "class", "separator-check-number svelte-1squrb9");
-    			add_location(div0, file$1, 264, 12, 6838);
+    			add_location(div0, file$1, 77, 12, 2026);
     			attr_dev(div1, "class", "separator-check-current svelte-1squrb9");
-    			add_location(div1, file$1, 263, 10, 6788);
+    			add_location(div1, file$1, 76, 10, 1976);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -732,24 +958,24 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(263:8) {#if currentStep === index}",
+    		source: "(76:8) {#if $currentStep === index}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (259:6) {#each multiStepOptions.stepsDescription as step, index}
-    function create_each_block(ctx) {
+    // (72:6) {#each multiStepOptions.stepsDescription as step, index}
+    function create_each_block$1(ctx) {
     	let div;
     	let span;
     	let t;
     	let if_block_anchor;
 
     	function select_block_type(ctx, dirty) {
-    		if (/*currentStep*/ ctx[1] === /*index*/ ctx[15]) return create_if_block;
-    		if (/*currentStep*/ ctx[1] > /*index*/ ctx[15]) return create_if_block_1;
-    		if (/*currentStep*/ ctx[1] < /*index*/ ctx[15]) return create_if_block_2;
+    		if (/*$currentStep*/ ctx[3] === /*index*/ ctx[9]) return create_if_block;
+    		if (/*$currentStep*/ ctx[3] > /*index*/ ctx[9]) return create_if_block_1;
+    		if (/*$currentStep*/ ctx[3] < /*index*/ ctx[9]) return create_if_block_2;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -763,9 +989,9 @@ var app = (function () {
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "dot svelte-1squrb9");
-    			add_location(span, file$1, 260, 10, 6706);
+    			add_location(span, file$1, 73, 10, 1893);
     			attr_dev(div, "class", "separator-line svelte-1squrb9");
-    			add_location(div, file$1, 259, 8, 6667);
+    			add_location(div, file$1, 72, 8, 1854);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -799,9 +1025,9 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block.name,
+    		id: create_each_block$1.name,
     		type: "each",
-    		source: "(259:6) {#each multiStepOptions.stepsDescription as step, index}",
+    		source: "(72:6) {#each multiStepOptions.stepsDescription as step, index}",
     		ctx
     	});
 
@@ -847,7 +1073,7 @@ var app = (function () {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
     	}
 
     	const default_slot_template = /*#slots*/ ctx[6].default;
@@ -890,29 +1116,29 @@ var app = (function () {
     			span1.textContent = "next";
     			attr_dev(div0, "id", "multistep-error-messages");
     			attr_dev(div0, "class", "svelte-1squrb9");
-    			add_location(div0, file$1, 245, 2, 6069);
+    			add_location(div0, file$1, 58, 2, 1256);
     			attr_dev(h1, "class", "multistep-form-title svelte-1squrb9");
-    			add_location(h1, file$1, 246, 2, 6109);
+    			add_location(h1, file$1, 59, 2, 1296);
     			attr_dev(h5, "class", "multistep-form-subtitle svelte-1squrb9");
-    			add_location(h5, file$1, 247, 2, 6178);
+    			add_location(h5, file$1, 60, 2, 1365);
     			attr_dev(div1, "class", "multistep-left-sidebar svelte-1squrb9");
-    			add_location(div1, file$1, 249, 4, 6287);
+    			add_location(div1, file$1, 62, 4, 1474);
     			attr_dev(div2, "class", "separator svelte-1squrb9");
-    			add_location(div2, file$1, 257, 4, 6572);
+    			add_location(div2, file$1, 70, 4, 1759);
     			attr_dev(div3, "class", "multistep-right-sidebar svelte-1squrb9");
-    			add_location(div3, file$1, 280, 4, 7413);
+    			add_location(div3, file$1, 93, 4, 2603);
     			attr_dev(form, "class", "multistep-form svelte-1squrb9");
-    			add_location(form, file$1, 248, 2, 6253);
+    			add_location(form, file$1, 61, 2, 1440);
     			attr_dev(span0, "id", "multistep-prev");
     			attr_dev(span0, "class", "svelte-1squrb9");
-    			add_location(span0, file$1, 286, 4, 7564);
+    			add_location(span0, file$1, 99, 4, 2754);
     			attr_dev(span1, "id", "multistep-next");
     			attr_dev(span1, "class", "svelte-1squrb9");
-    			add_location(span1, file$1, 288, 4, 7636);
+    			add_location(span1, file$1, 101, 4, 2826);
     			attr_dev(div4, "class", "multistep-continue-button svelte-1squrb9");
-    			add_location(div4, file$1, 285, 2, 7520);
+    			add_location(div4, file$1, 98, 2, 2710);
     			attr_dev(div5, "class", "multistep-master-form svelte-1squrb9");
-    			add_location(div5, file$1, 244, 0, 6031);
+    			add_location(div5, file$1, 57, 0, 1218);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -958,7 +1184,7 @@ var app = (function () {
     			if (!mounted) {
     				dispose = [
     					listen_dev(span0, "click", /*previousStep*/ ctx[2], false, false, false),
-    					listen_dev(span1, "click", /*nextStep*/ ctx[3], false, false, false)
+    					listen_dev(span1, "click", /*nextStep*/ ctx[1], false, false, false)
     				];
 
     				mounted = true;
@@ -992,18 +1218,18 @@ var app = (function () {
     				each_blocks_1.length = each_value_1.length;
     			}
 
-    			if (dirty & /*currentStep, multiStepOptions*/ 3) {
+    			if (dirty & /*$currentStep, multiStepOptions*/ 9) {
     				each_value = /*multiStepOptions*/ ctx[0].stepsDescription;
     				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context(ctx, each_value, i);
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block(child_ctx);
+    						each_blocks[i] = create_each_block$1(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(div2, null);
     					}
@@ -1017,8 +1243,17 @@ var app = (function () {
     			}
 
     			if (default_slot) {
-    				if (default_slot.p && dirty & /*$$scope*/ 32) {
-    					update_slot(default_slot, default_slot_template, ctx, /*$$scope*/ ctx[5], dirty, null, null);
+    				if (default_slot.p && (!current || dirty & /*$$scope*/ 32)) {
+    					update_slot_base(
+    						default_slot,
+    						default_slot_template,
+    						ctx,
+    						/*$$scope*/ ctx[5],
+    						!current
+    						? get_all_dirty_from_scope(/*$$scope*/ ctx[5])
+    						: get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null),
+    						null
+    					);
     				}
     			}
     		},
@@ -1053,38 +1288,17 @@ var app = (function () {
     }
 
     function instance$1($$self, $$props, $$invalidate) {
+    	let $currentStep;
+    	validate_store(currentStep, 'currentStep');
+    	component_subscribe($$self, currentStep, $$value => $$invalidate(3, $currentStep = $$value));
     	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots("MasterForm", slots, ['default']);
+    	validate_slots('MasterForm', slots, ['default']);
     	let { multiStepOptions } = $$props;
     	let { resetSteps } = $$props;
-    	let currentStep = 0;
 
-    	// TODO: think about it if this is nedeed or useless
-    	const uuidv4 = () => {
-    		return ("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx").replace(/[xy]/g, function (c) {
-    			var r = Math.random() * 16 | 0, v = c == "x" ? r : r & 3 | 8;
-    			return v.toString(16);
-    		});
-    	};
-
-    	const setPrevButtonOpacity = () => {
-    		let prev = document.querySelector("#multistep-prev");
-    		prev.style.opacity = 1;
-
-    		if (currentStep == 0) {
-    			prev.style.opacity = 0.5;
-    		}
-    	};
-
-    	const setNextButtonOpacity = itemsLenght => {
-    		let next = document.querySelector("#multistep-next");
-    		next.style.opacity = 1;
-
-    		if (currentStep == itemsLenght - 1) {
-    			next.style.opacity = 0.5;
-    		}
-    	};
-
+    	/*
+    Lifecycle Hooks
+    */
     	onMount(async () => {
     		let steps = document.querySelectorAll(".step");
 
@@ -1092,141 +1306,70 @@ var app = (function () {
     			step.setAttribute("id", uuidv4());
     			step.dataset.stepNumber = index;
 
-    			if (currentStep === index) {
+    			if ($currentStep === index) {
     				step.classList.remove("step-not-active");
     				step.classList.add("step-is-active");
     			}
     		});
 
-    		setPrevButtonOpacity();
-    		setNextButtonOpacity(steps.length);
+    		updateButtonVisibility();
     	});
 
     	afterUpdate(async () => {
     		if (resetSteps) {
-    			let steps = document.querySelectorAll(".step");
-    			steps[currentStep].classList.remove("step-is-active");
-    			steps[currentStep].classList.add("step-not-active");
-    			$$invalidate(1, currentStep = 0);
-    			steps[currentStep].classList.remove("step-not-active");
-    			steps[currentStep].classList.add("step-is-active");
-    			setPrevButtonOpacity();
-    			setNextButtonOpacity(steps.length);
+    			updateStepStatus(stepStore.reset);
     			$$invalidate(4, resetSteps = false);
     		}
     	});
 
-    	const formHasError = step => {
-    		const requiredFields = step.querySelectorAll("[required]");
-    		let hasError = false;
-    		let errorMessages = [];
+    	function nextStep() {
+    		const steps = document.querySelectorAll(".step");
 
-    		requiredFields.forEach(el => {
-    			if (!el.checkValidity()) {
-    				hasError = true;
-    				errorMessages.push(el.dataset.multistepErrorMessage);
-    			}
-    		});
-
-    		if (hasError) {
-    			showError(errorMessages);
-    		}
-
-    		return hasError;
-    	};
-
-    	const deleteChildNodes = el => {
-    		while (el.firstChild) {
-    			el.removeChild(el.firstChild);
-    		}
-    	};
-
-    	const showError = errorMessages => {
-    		let errorField = document.querySelector("#multistep-error-messages");
-    		deleteChildNodes(errorField);
-    		errorField.style.visibility = "visible";
-    		errorField.style.opacity = 1;
-
-    		errorMessages.forEach(message => {
-    			let p = document.createElement("p");
-    			p.innerText = message;
-    			errorField.appendChild(p);
-    		});
-
-    		setTimeout(
-    			() => {
-    				errorField.style.visibility = "hidden";
-    				errorField.style.opacity = 0;
-    			},
-    			3000
-    		);
-    	};
-
-    	const previousStep = () => {
-    		let steps = document.querySelectorAll(".step");
-
-    		if (currentStep - 1 > -1) {
-    			steps[currentStep].classList.add("step-not-active");
-    			$$invalidate(1, currentStep -= 1);
-    			steps[currentStep].classList.remove("step-not-active");
-    			steps[currentStep].classList.add("step-is-active");
-    		}
-
-    		setPrevButtonOpacity();
-    		setNextButtonOpacity(steps.length);
-    	};
-
-    	const nextStep = () => {
-    		let steps = document.querySelectorAll(".step");
-
-    		if (formHasError(steps[currentStep])) {
+    		if (formHasError()) {
     			return;
     		}
 
-    		if (currentStep + 1 <= steps.length - 1) {
-    			steps[currentStep].classList.remove("step-is-active");
-    			steps[currentStep].classList.add("step-not-active");
-    			$$invalidate(1, currentStep += 1);
-    			steps[currentStep].classList.remove("step-not-active");
-    			steps[currentStep].classList.add("step-is-active");
+    		if ($currentStep + 1 <= steps.length - 1) {
+    			updateStepStatus(currentStep.increment);
     		}
+    	}
 
-    		setPrevButtonOpacity();
-    		setNextButtonOpacity(steps.length);
+    	const previousStep = () => {
+    		if ($currentStep - 1 > -1) {
+    			updateStepStatus(currentStep.decrement);
+    		}
     	};
 
-    	const writable_props = ["multiStepOptions", "resetSteps"];
+    	const writable_props = ['multiStepOptions', 'resetSteps'];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<MasterForm> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<MasterForm> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
-    		if ("multiStepOptions" in $$props) $$invalidate(0, multiStepOptions = $$props.multiStepOptions);
-    		if ("resetSteps" in $$props) $$invalidate(4, resetSteps = $$props.resetSteps);
-    		if ("$$scope" in $$props) $$invalidate(5, $$scope = $$props.$$scope);
+    		if ('multiStepOptions' in $$props) $$invalidate(0, multiStepOptions = $$props.multiStepOptions);
+    		if ('resetSteps' in $$props) $$invalidate(4, resetSteps = $$props.resetSteps);
+    		if ('$$scope' in $$props) $$invalidate(5, $$scope = $$props.$$scope);
     	};
 
     	$$self.$capture_state = () => ({
-    		multiStepOptions,
-    		resetSteps,
-    		currentStep,
     		onMount,
     		afterUpdate,
+    		currentStep,
     		uuidv4,
-    		setPrevButtonOpacity,
-    		setNextButtonOpacity,
     		formHasError,
-    		deleteChildNodes,
-    		showError,
+    		updateStepStatus,
+    		updateButtonVisibility,
+    		multiStepOptions,
+    		resetSteps,
+    		nextStep,
     		previousStep,
-    		nextStep
+    		$currentStep
     	});
 
     	$$self.$inject_state = $$props => {
-    		if ("multiStepOptions" in $$props) $$invalidate(0, multiStepOptions = $$props.multiStepOptions);
-    		if ("resetSteps" in $$props) $$invalidate(4, resetSteps = $$props.resetSteps);
-    		if ("currentStep" in $$props) $$invalidate(1, currentStep = $$props.currentStep);
+    		if ('multiStepOptions' in $$props) $$invalidate(0, multiStepOptions = $$props.multiStepOptions);
+    		if ('resetSteps' in $$props) $$invalidate(4, resetSteps = $$props.resetSteps);
     	};
 
     	if ($$props && "$$inject" in $$props) {
@@ -1235,9 +1378,9 @@ var app = (function () {
 
     	return [
     		multiStepOptions,
-    		currentStep,
-    		previousStep,
     		nextStep,
+    		previousStep,
+    		$currentStep,
     		resetSteps,
     		$$scope,
     		slots
@@ -1247,7 +1390,13 @@ var app = (function () {
     class MasterForm extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { multiStepOptions: 0, resetSteps: 4 });
+
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, {
+    			multiStepOptions: 0,
+    			resetSteps: 4,
+    			nextStep: 1,
+    			previousStep: 2
+    		});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -1259,11 +1408,11 @@ var app = (function () {
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*multiStepOptions*/ ctx[0] === undefined && !("multiStepOptions" in props)) {
+    		if (/*multiStepOptions*/ ctx[0] === undefined && !('multiStepOptions' in props)) {
     			console.warn("<MasterForm> was created without expected prop 'multiStepOptions'");
     		}
 
-    		if (/*resetSteps*/ ctx[4] === undefined && !("resetSteps" in props)) {
+    		if (/*resetSteps*/ ctx[4] === undefined && !('resetSteps' in props)) {
     			console.warn("<MasterForm> was created without expected prop 'resetSteps'");
     		}
     	}
@@ -1283,19 +1432,35 @@ var app = (function () {
     	set resetSteps(value) {
     		throw new Error("<MasterForm>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
+
+    	get nextStep() {
+    		return this.$$.ctx[1];
+    	}
+
+    	set nextStep(value) {
+    		throw new Error("<MasterForm>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get previousStep() {
+    		return this.$$.ctx[2];
+    	}
+
+    	set previousStep(value) {
+    		throw new Error("<MasterForm>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
     }
 
-    /* src/App.svelte generated by Svelte v3.29.4 */
-    const file$2 = "src/App.svelte";
+    /* src/App.svelte generated by Svelte v3.44.1 */
+    const file = "src/App.svelte";
 
-    function get_each_context$1(ctx, list, i) {
+    function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[12] = list[i];
+    	child_ctx[16] = list[i];
     	return child_ctx;
     }
 
-    // (69:4) <Step>
-    function create_default_slot_2(ctx) {
+    // (33:4) <Step>
+    function create_default_slot_3(ctx) {
     	let div0;
     	let label0;
     	let t1;
@@ -1305,6 +1470,11 @@ var app = (function () {
     	let label1;
     	let t4;
     	let input1;
+    	let t5;
+    	let div2;
+    	let input2;
+    	let input2_class_value;
+    	let input2_disabled_value;
     	let mounted;
     	let dispose;
 
@@ -1321,65 +1491,90 @@ var app = (function () {
     			label1.textContent = "🦄 Repo url:";
     			t4 = space();
     			input1 = element("input");
-    			attr_dev(label0, "class", "input-label svelte-5d2ejg");
+    			t5 = space();
+    			div2 = element("div");
+    			input2 = element("input");
+    			attr_dev(label0, "class", "input-label svelte-14pn4o6");
     			attr_dev(label0, "for", "form-url-field");
-    			add_location(label0, file$2, 70, 8, 1373);
-    			attr_dev(input0, "class", "wide svelte-5d2ejg");
+    			add_location(label0, file, 34, 8, 1009);
+    			attr_dev(input0, "class", "wide svelte-14pn4o6");
     			attr_dev(input0, "id", "form-input-field");
     			attr_dev(input0, "data-multistep-error-message", "name couldn't be empty");
     			attr_dev(input0, "placeholder", "githuber martinez");
-    			add_location(input0, file$2, 73, 8, 1476);
-    			attr_dev(div0, "class", "svelte-5d2ejg");
-    			add_location(div0, file$2, 69, 6, 1359);
-    			attr_dev(label1, "class", "input-label svelte-5d2ejg");
+    			add_location(input0, file, 37, 8, 1112);
+    			attr_dev(div0, "class", "svelte-14pn4o6");
+    			add_location(div0, file, 33, 6, 995);
+    			attr_dev(label1, "class", "input-label svelte-14pn4o6");
     			attr_dev(label1, "for", "form-url-field");
-    			add_location(label1, file$2, 82, 8, 1750);
-    			attr_dev(input1, "class", "wide svelte-5d2ejg");
+    			add_location(label1, file, 47, 8, 1394);
+    			attr_dev(input1, "class", "wide svelte-14pn4o6");
     			attr_dev(input1, "id", "form-url-field");
     			attr_dev(input1, "type", "url");
     			input1.required = true;
     			attr_dev(input1, "data-multistep-error-message", "url format is wrong");
     			attr_dev(input1, "placeholder", "http://github.com/handler/repo");
-    			add_location(input1, file$2, 83, 8, 1827);
-    			attr_dev(div1, "class", "svelte-5d2ejg");
-    			add_location(div1, file$2, 81, 6, 1736);
+    			add_location(input1, file, 48, 8, 1471);
+    			attr_dev(div1, "class", "svelte-14pn4o6");
+    			add_location(div1, file, 46, 6, 1380);
+    			attr_dev(input2, "class", input2_class_value = "button " + (!/*repoUrl*/ ctx[3] ? 'buton-disatbled' : '') + " svelte-14pn4o6");
+    			input2.value = "call next programatically";
+    			attr_dev(input2, "id", "form-skip-field");
+    			attr_dev(input2, "type", "button");
+    			input2.disabled = input2_disabled_value = !/*repoUrl*/ ctx[3];
+    			add_location(input2, file, 59, 8, 1762);
+    			attr_dev(div2, "class", "svelte-14pn4o6");
+    			add_location(div2, file, 58, 6, 1748);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div0, anchor);
     			append_dev(div0, label0);
     			append_dev(div0, t1);
     			append_dev(div0, input0);
-    			set_input_value(input0, /*githubHandle*/ ctx[1]);
+    			set_input_value(input0, /*githubHandle*/ ctx[2]);
     			insert_dev(target, t2, anchor);
     			insert_dev(target, div1, anchor);
     			append_dev(div1, label1);
     			append_dev(div1, t4);
     			append_dev(div1, input1);
-    			set_input_value(input1, /*repoUrl*/ ctx[2]);
+    			set_input_value(input1, /*repoUrl*/ ctx[3]);
+    			insert_dev(target, t5, anchor);
+    			insert_dev(target, div2, anchor);
+    			append_dev(div2, input2);
 
     			if (!mounted) {
     				dispose = [
-    					listen_dev(input0, "keyup", /*handleTyping*/ ctx[6], false, false, false),
-    					listen_dev(input0, "input", /*input0_input_handler*/ ctx[7]),
-    					listen_dev(input1, "input", /*input1_input_handler*/ ctx[8])
+    					listen_dev(input0, "keyup", /*handleTyping*/ ctx[7], false, false, false),
+    					listen_dev(input0, "input", /*input0_input_handler*/ ctx[8]),
+    					listen_dev(input1, "input", /*input1_input_handler*/ ctx[9]),
+    					listen_dev(input2, "click", prevent_default(/*click_handler*/ ctx[10]), false, true, false)
     				];
 
     				mounted = true;
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*githubHandle*/ 2 && input0.value !== /*githubHandle*/ ctx[1]) {
-    				set_input_value(input0, /*githubHandle*/ ctx[1]);
+    			if (dirty & /*githubHandle*/ 4 && input0.value !== /*githubHandle*/ ctx[2]) {
+    				set_input_value(input0, /*githubHandle*/ ctx[2]);
     			}
 
-    			if (dirty & /*repoUrl*/ 4) {
-    				set_input_value(input1, /*repoUrl*/ ctx[2]);
+    			if (dirty & /*repoUrl*/ 8) {
+    				set_input_value(input1, /*repoUrl*/ ctx[3]);
+    			}
+
+    			if (dirty & /*repoUrl*/ 8 && input2_class_value !== (input2_class_value = "button " + (!/*repoUrl*/ ctx[3] ? 'buton-disatbled' : '') + " svelte-14pn4o6")) {
+    				attr_dev(input2, "class", input2_class_value);
+    			}
+
+    			if (dirty & /*repoUrl*/ 8 && input2_disabled_value !== (input2_disabled_value = !/*repoUrl*/ ctx[3])) {
+    				prop_dev(input2, "disabled", input2_disabled_value);
     			}
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div0);
     			if (detaching) detach_dev(t2);
     			if (detaching) detach_dev(div1);
+    			if (detaching) detach_dev(t5);
+    			if (detaching) detach_dev(div2);
     			mounted = false;
     			run_all(dispose);
     		}
@@ -1387,30 +1582,87 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_default_slot_2.name,
+    		id: create_default_slot_3.name,
     		type: "slot",
-    		source: "(69:4) <Step>",
+    		source: "(33:4) <Step>",
     		ctx
     	});
 
     	return block;
     }
 
-    // (101:10) {#each categories as category}
-    function create_each_block$1(ctx) {
+    // (70:4) <Step>
+    function create_default_slot_2(ctx) {
+    	let p;
+    	let t1;
+    	let div;
+    	let input;
+    	let mounted;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			p = element("p");
+    			p.textContent = "May or may not be skipped";
+    			t1 = space();
+    			div = element("div");
+    			input = element("input");
+    			attr_dev(p, "class", "svelte-14pn4o6");
+    			add_location(p, file, 70, 6, 2082);
+    			attr_dev(input, "class", "button svelte-14pn4o6");
+    			input.value = "call previous programatically";
+    			attr_dev(input, "id", "form-skip-field");
+    			attr_dev(input, "type", "button");
+    			add_location(input, file, 72, 8, 2135);
+    			attr_dev(div, "class", "svelte-14pn4o6");
+    			add_location(div, file, 71, 6, 2121);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, p, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, input);
+
+    			if (!mounted) {
+    				dispose = listen_dev(input, "click", prevent_default(/*click_handler_1*/ ctx[11]), false, true, false);
+    				mounted = true;
+    			}
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(p);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(div);
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot_2.name,
+    		type: "slot",
+    		source: "(70:4) <Step>",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (90:10) {#each categories as category}
+    function create_each_block(ctx) {
     	let option;
-    	let t_value = /*category*/ ctx[12].text + "";
+    	let t_value = /*category*/ ctx[16].text + "";
     	let t;
-    	let option_value_value;
 
     	const block = {
     		c: function create() {
     			option = element("option");
     			t = text(t_value);
-    			option.__value = option_value_value = /*category*/ ctx[12];
+    			option.__value = /*category*/ ctx[16];
     			option.value = option.__value;
-    			attr_dev(option, "class", "svelte-5d2ejg");
-    			add_location(option, file$2, 101, 12, 2401);
+    			attr_dev(option, "class", "svelte-14pn4o6");
+    			add_location(option, file, 90, 12, 2688);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -1424,16 +1676,16 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$1.name,
+    		id: create_each_block.name,
     		type: "each",
-    		source: "(101:10) {#each categories as category}",
+    		source: "(90:10) {#each categories as category}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (94:4) <Step>
+    // (82:4) <Step>
     function create_default_slot_1(ctx) {
     	let div;
     	let label;
@@ -1441,12 +1693,12 @@ var app = (function () {
     	let select;
     	let mounted;
     	let dispose;
-    	let each_value = /*categories*/ ctx[5];
+    	let each_value = /*categories*/ ctx[6];
     	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
+    		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
     	}
 
     	const block = {
@@ -1461,15 +1713,15 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(label, "class", "input-label svelte-5d2ejg");
+    			attr_dev(label, "class", "input-label svelte-14pn4o6");
     			attr_dev(label, "for", "form-category-field");
-    			add_location(label, file$2, 95, 8, 2133);
-    			attr_dev(select, "class", "select-categories wide svelte-5d2ejg");
+    			add_location(label, file, 83, 8, 2411);
+    			attr_dev(select, "class", "select-categories wide svelte-14pn4o6");
     			attr_dev(select, "data-multistep-error-message", "Select a profile");
-    			if (/*selected*/ ctx[3] === void 0) add_render_callback(() => /*select_change_handler*/ ctx[9].call(select));
-    			add_location(select, file$2, 96, 8, 2208);
-    			attr_dev(div, "class", "svelte-5d2ejg");
-    			add_location(div, file$2, 94, 6, 2119);
+    			if (/*selected*/ ctx[4] === void 0) add_render_callback(() => /*select_change_handler*/ ctx[12].call(select));
+    			add_location(select, file, 84, 8, 2486);
+    			attr_dev(div, "class", "svelte-14pn4o6");
+    			add_location(div, file, 82, 6, 2397);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -1481,26 +1733,26 @@ var app = (function () {
     				each_blocks[i].m(select, null);
     			}
 
-    			select_option(select, /*selected*/ ctx[3]);
+    			select_option(select, /*selected*/ ctx[4]);
 
     			if (!mounted) {
-    				dispose = listen_dev(select, "change", /*select_change_handler*/ ctx[9]);
+    				dispose = listen_dev(select, "change", /*select_change_handler*/ ctx[12]);
     				mounted = true;
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*categories*/ 32) {
-    				each_value = /*categories*/ ctx[5];
+    			if (dirty & /*categories*/ 64) {
+    				each_value = /*categories*/ ctx[6];
     				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$1(ctx, each_value, i);
+    					const child_ctx = get_each_context(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$1(child_ctx);
+    						each_blocks[i] = create_each_block(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(select, null);
     					}
@@ -1513,8 +1765,8 @@ var app = (function () {
     				each_blocks.length = each_value.length;
     			}
 
-    			if (dirty & /*selected, categories*/ 40) {
-    				select_option(select, /*selected*/ ctx[3]);
+    			if (dirty & /*selected, categories*/ 80) {
+    				select_option(select, /*selected*/ ctx[4]);
     			}
     		},
     		d: function destroy(detaching) {
@@ -1529,21 +1781,31 @@ var app = (function () {
     		block,
     		id: create_default_slot_1.name,
     		type: "slot",
-    		source: "(94:4) <Step>",
+    		source: "(82:4) <Step>",
     		ctx
     	});
 
     	return block;
     }
 
-    // (68:2) <Form {multiStepOptions} bind:resetSteps>
+    // (32:2) <Form {multiStepOptions} bind:this={FormComponentRef} bind:resetSteps>
     function create_default_slot(ctx) {
     	let step0;
-    	let t;
+    	let t0;
     	let step1;
+    	let t1;
+    	let step2;
     	let current;
 
     	step0 = new StepForm({
+    			props: {
+    				$$slots: { default: [create_default_slot_3] },
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
+
+    	step1 = new StepForm({
     			props: {
     				$$slots: { default: [create_default_slot_2] },
     				$$scope: { ctx }
@@ -1551,7 +1813,7 @@ var app = (function () {
     			$$inline: true
     		});
 
-    	step1 = new StepForm({
+    	step2 = new StepForm({
     			props: {
     				$$slots: { default: [create_default_slot_1] },
     				$$scope: { ctx }
@@ -1562,46 +1824,61 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			create_component(step0.$$.fragment);
-    			t = space();
+    			t0 = space();
     			create_component(step1.$$.fragment);
+    			t1 = space();
+    			create_component(step2.$$.fragment);
     		},
     		m: function mount(target, anchor) {
     			mount_component(step0, target, anchor);
-    			insert_dev(target, t, anchor);
+    			insert_dev(target, t0, anchor);
     			mount_component(step1, target, anchor);
+    			insert_dev(target, t1, anchor);
+    			mount_component(step2, target, anchor);
     			current = true;
     		},
     		p: function update(ctx, dirty) {
     			const step0_changes = {};
 
-    			if (dirty & /*$$scope, repoUrl, githubHandle*/ 32774) {
+    			if (dirty & /*$$scope, repoUrl, FormComponentRef, githubHandle*/ 524301) {
     				step0_changes.$$scope = { dirty, ctx };
     			}
 
     			step0.$set(step0_changes);
     			const step1_changes = {};
 
-    			if (dirty & /*$$scope, selected*/ 32776) {
+    			if (dirty & /*$$scope, FormComponentRef*/ 524289) {
     				step1_changes.$$scope = { dirty, ctx };
     			}
 
     			step1.$set(step1_changes);
+    			const step2_changes = {};
+
+    			if (dirty & /*$$scope, selected*/ 524304) {
+    				step2_changes.$$scope = { dirty, ctx };
+    			}
+
+    			step2.$set(step2_changes);
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(step0.$$.fragment, local);
     			transition_in(step1.$$.fragment, local);
+    			transition_in(step2.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(step0.$$.fragment, local);
     			transition_out(step1.$$.fragment, local);
+    			transition_out(step2.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
     			destroy_component(step0, detaching);
-    			if (detaching) detach_dev(t);
+    			if (detaching) detach_dev(t0);
     			destroy_component(step1, detaching);
+    			if (detaching) detach_dev(t1);
+    			destroy_component(step2, detaching);
     		}
     	};
 
@@ -1609,14 +1886,14 @@ var app = (function () {
     		block,
     		id: create_default_slot.name,
     		type: "slot",
-    		source: "(68:2) <Form {multiStepOptions} bind:resetSteps>",
+    		source: "(32:2) <Form {multiStepOptions} bind:this={FormComponentRef} bind:resetSteps>",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$2(ctx) {
+    function create_fragment(ctx) {
     	let main;
     	let form;
     	let updating_resetSteps;
@@ -1624,42 +1901,43 @@ var app = (function () {
     	let div;
     	let h1;
     	let span0;
-    	let t1_value = (/*githubHandle*/ ctx[1] || "") + "";
+    	let t1_value = (/*githubHandle*/ ctx[2] || "") + "";
     	let t1;
     	let t2;
     	let span1;
 
-    	let t3_value = (/*repoUrl*/ ctx[2]
-    	? `has a repo ${/*repoUrl*/ ctx[2]}`
+    	let t3_value = (/*repoUrl*/ ctx[3]
+    	? `has a repo ${/*repoUrl*/ ctx[3]}`
     	: "") + "";
 
     	let t3;
     	let t4;
     	let span2;
 
-    	let t5_value = (/*selected*/ ctx[3].text
-    	? `and likes ${/*selected*/ ctx[3].text}`
+    	let t5_value = (/*selected*/ ctx[4].text
+    	? `and likes ${/*selected*/ ctx[4].text}`
     	: "") + "";
 
     	let t5;
     	let current;
 
     	function form_resetSteps_binding(value) {
-    		/*form_resetSteps_binding*/ ctx[10].call(null, value);
+    		/*form_resetSteps_binding*/ ctx[14](value);
     	}
 
     	let form_props = {
-    		multiStepOptions: /*multiStepOptions*/ ctx[4],
+    		multiStepOptions: /*multiStepOptions*/ ctx[5],
     		$$slots: { default: [create_default_slot] },
     		$$scope: { ctx }
     	};
 
-    	if (/*resetSteps*/ ctx[0] !== void 0) {
-    		form_props.resetSteps = /*resetSteps*/ ctx[0];
+    	if (/*resetSteps*/ ctx[1] !== void 0) {
+    		form_props.resetSteps = /*resetSteps*/ ctx[1];
     	}
 
     	form = new MasterForm({ props: form_props, $$inline: true });
-    	binding_callbacks.push(() => bind(form, "resetSteps", form_resetSteps_binding));
+    	/*form_binding*/ ctx[13](form);
+    	binding_callbacks.push(() => bind(form, 'resetSteps', form_resetSteps_binding));
 
     	const block = {
     		c: function create() {
@@ -1676,18 +1954,18 @@ var app = (function () {
     			t4 = space();
     			span2 = element("span");
     			t5 = text(t5_value);
-    			attr_dev(span0, "class", "red svelte-5d2ejg");
-    			add_location(span0, file$2, 110, 6, 2561);
-    			attr_dev(span1, "class", "blue svelte-5d2ejg");
-    			add_location(span1, file$2, 111, 6, 2613);
-    			attr_dev(span2, "class", "orange svelte-5d2ejg");
-    			add_location(span2, file$2, 112, 6, 2686);
-    			attr_dev(h1, "class", "svelte-5d2ejg");
-    			add_location(h1, file$2, 109, 4, 2550);
-    			attr_dev(div, "class", "result svelte-5d2ejg");
-    			add_location(div, file$2, 108, 2, 2525);
-    			attr_dev(main, "class", "svelte-5d2ejg");
-    			add_location(main, file$2, 66, 0, 1291);
+    			attr_dev(span0, "class", "red svelte-14pn4o6");
+    			add_location(span0, file, 99, 6, 2848);
+    			attr_dev(span1, "class", "blue svelte-14pn4o6");
+    			add_location(span1, file, 100, 6, 2900);
+    			attr_dev(span2, "class", "orange svelte-14pn4o6");
+    			add_location(span2, file, 101, 6, 2973);
+    			attr_dev(h1, "class", "svelte-14pn4o6");
+    			add_location(h1, file, 98, 4, 2837);
+    			attr_dev(div, "class", "result svelte-14pn4o6");
+    			add_location(div, file, 97, 2, 2812);
+    			attr_dev(main, "class", "example-main svelte-14pn4o6");
+    			add_location(main, file, 30, 0, 877);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1711,25 +1989,25 @@ var app = (function () {
     		p: function update(ctx, [dirty]) {
     			const form_changes = {};
 
-    			if (dirty & /*$$scope, selected, repoUrl, githubHandle*/ 32782) {
+    			if (dirty & /*$$scope, selected, FormComponentRef, repoUrl, githubHandle*/ 524317) {
     				form_changes.$$scope = { dirty, ctx };
     			}
 
-    			if (!updating_resetSteps && dirty & /*resetSteps*/ 1) {
+    			if (!updating_resetSteps && dirty & /*resetSteps*/ 2) {
     				updating_resetSteps = true;
-    				form_changes.resetSteps = /*resetSteps*/ ctx[0];
+    				form_changes.resetSteps = /*resetSteps*/ ctx[1];
     				add_flush_callback(() => updating_resetSteps = false);
     			}
 
     			form.$set(form_changes);
-    			if ((!current || dirty & /*githubHandle*/ 2) && t1_value !== (t1_value = (/*githubHandle*/ ctx[1] || "") + "")) set_data_dev(t1, t1_value);
+    			if ((!current || dirty & /*githubHandle*/ 4) && t1_value !== (t1_value = (/*githubHandle*/ ctx[2] || "") + "")) set_data_dev(t1, t1_value);
 
-    			if ((!current || dirty & /*repoUrl*/ 4) && t3_value !== (t3_value = (/*repoUrl*/ ctx[2]
-    			? `has a repo ${/*repoUrl*/ ctx[2]}`
+    			if ((!current || dirty & /*repoUrl*/ 8) && t3_value !== (t3_value = (/*repoUrl*/ ctx[3]
+    			? `has a repo ${/*repoUrl*/ ctx[3]}`
     			: "") + "")) set_data_dev(t3, t3_value);
 
-    			if ((!current || dirty & /*selected*/ 8) && t5_value !== (t5_value = (/*selected*/ ctx[3].text
-    			? `and likes ${/*selected*/ ctx[3].text}`
+    			if ((!current || dirty & /*selected*/ 16) && t5_value !== (t5_value = (/*selected*/ ctx[4].text
+    			? `and likes ${/*selected*/ ctx[4].text}`
     			: "") + "")) set_data_dev(t5, t5_value);
     		},
     		i: function intro(local) {
@@ -1743,13 +2021,14 @@ var app = (function () {
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(main);
+    			/*form_binding*/ ctx[13](null);
     			destroy_component(form);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$2.name,
+    		id: create_fragment.name,
     		type: "component",
     		source: "",
     		ctx
@@ -1758,9 +2037,10 @@ var app = (function () {
     	return block;
     }
 
-    function instance$2($$self, $$props, $$invalidate) {
+    function instance($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots("App", slots, []);
+    	validate_slots('App', slots, []);
+    	let FormComponentRef;
     	let resetSteps = false;
     	let githubHandle, repoUrl, technology;
 
@@ -1774,6 +2054,10 @@ var app = (function () {
     			},
     			{
     				title: "STEP 2",
+    				subtitle: "Skip if input equals to next"
+    			},
+    			{
+    				title: "STEP 3",
     				subtitle: "All the details to perform on this step"
     			}
     		]
@@ -1788,39 +2072,51 @@ var app = (function () {
     	];
 
     	const handleTyping = event => {
-    		$$invalidate(2, repoUrl = `http://github.com/${event.target.value}/`);
+    		$$invalidate(3, repoUrl = `http://github.com/${event.target.value}/`);
     	};
 
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<App> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<App> was created with unknown prop '${key}'`);
     	});
 
     	function input0_input_handler() {
     		githubHandle = this.value;
-    		$$invalidate(1, githubHandle);
+    		$$invalidate(2, githubHandle);
     	}
 
     	function input1_input_handler() {
     		repoUrl = this.value;
-    		$$invalidate(2, repoUrl);
+    		$$invalidate(3, repoUrl);
     	}
+
+    	const click_handler = () => FormComponentRef.nextStep();
+    	const click_handler_1 = () => FormComponentRef.previousStep();
 
     	function select_change_handler() {
     		selected = select_value(this);
-    		$$invalidate(3, selected);
-    		$$invalidate(5, categories);
+    		$$invalidate(4, selected);
+    		$$invalidate(6, categories);
+    	}
+
+    	function form_binding($$value) {
+    		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+    			FormComponentRef = $$value;
+    			$$invalidate(0, FormComponentRef);
+    		});
     	}
 
     	function form_resetSteps_binding(value) {
     		resetSteps = value;
-    		$$invalidate(0, resetSteps);
+    		$$invalidate(1, resetSteps);
     	}
 
     	$$self.$capture_state = () => ({
+    		onMount,
     		Form: MasterForm,
     		Step: StepForm,
+    		FormComponentRef,
     		resetSteps,
     		githubHandle,
     		repoUrl,
@@ -1832,12 +2128,13 @@ var app = (function () {
     	});
 
     	$$self.$inject_state = $$props => {
-    		if ("resetSteps" in $$props) $$invalidate(0, resetSteps = $$props.resetSteps);
-    		if ("githubHandle" in $$props) $$invalidate(1, githubHandle = $$props.githubHandle);
-    		if ("repoUrl" in $$props) $$invalidate(2, repoUrl = $$props.repoUrl);
-    		if ("technology" in $$props) technology = $$props.technology;
-    		if ("multiStepOptions" in $$props) $$invalidate(4, multiStepOptions = $$props.multiStepOptions);
-    		if ("selected" in $$props) $$invalidate(3, selected = $$props.selected);
+    		if ('FormComponentRef' in $$props) $$invalidate(0, FormComponentRef = $$props.FormComponentRef);
+    		if ('resetSteps' in $$props) $$invalidate(1, resetSteps = $$props.resetSteps);
+    		if ('githubHandle' in $$props) $$invalidate(2, githubHandle = $$props.githubHandle);
+    		if ('repoUrl' in $$props) $$invalidate(3, repoUrl = $$props.repoUrl);
+    		if ('technology' in $$props) technology = $$props.technology;
+    		if ('multiStepOptions' in $$props) $$invalidate(5, multiStepOptions = $$props.multiStepOptions);
+    		if ('selected' in $$props) $$invalidate(4, selected = $$props.selected);
     	};
 
     	if ($$props && "$$inject" in $$props) {
@@ -1845,6 +2142,7 @@ var app = (function () {
     	}
 
     	return [
+    		FormComponentRef,
     		resetSteps,
     		githubHandle,
     		repoUrl,
@@ -1854,7 +2152,10 @@ var app = (function () {
     		handleTyping,
     		input0_input_handler,
     		input1_input_handler,
+    		click_handler,
+    		click_handler_1,
     		select_change_handler,
+    		form_binding,
     		form_resetSteps_binding
     	];
     }
@@ -1862,13 +2163,13 @@ var app = (function () {
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
+    		init(this, options, instance, create_fragment, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$2.name
+    			id: create_fragment.name
     		});
     	}
     }
@@ -1879,5 +2180,5 @@ var app = (function () {
 
     return app;
 
-}());
+})();
 //# sourceMappingURL=bundle.js.map

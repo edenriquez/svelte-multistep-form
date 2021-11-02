@@ -20,8 +20,8 @@
     "jest": "^26.6.0",
     "rollup": "^1.32.1",
     "rollup-plugin-node-resolve": "^5.2.0",
-    "rollup-plugin-svelte": "^5.2.2",
-    "svelte": "^3.23.0",
+    "rollup-plugin-svelte": "^6.1.1",
+    "svelte": "^3.44.1",
     "svelte-jester": "^1.1.5"
   },
   "homepage": "https://github.com/edenriquez/svelte-multistep-form",
