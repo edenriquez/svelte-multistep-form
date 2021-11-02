@@ -5,12 +5,11 @@
     uuidv4,
     formHasError,
     updateStepStatus,
-    updateButtonVisibility
+    updateButtonVisibility,
   } from "./helpers.js";
 
   export let multiStepOptions;
   export let resetSteps;
-
   /*
   Lifecycle Hooks
   */
@@ -25,7 +24,7 @@
         step.classList.add("step-is-active");
       }
     });
-    
+
     updateButtonVisibility();
   });
 
@@ -39,7 +38,7 @@
   /*
   App-navigation
   */
-  const nextStep = () => {
+  export function nextStep() {
     const steps = document.querySelectorAll(".step");
     if (formHasError()) {
       return;
@@ -47,14 +46,62 @@
     if ($currentStep + 1 <= steps.length - 1) {
       updateStepStatus(currentStep.increment);
     }
-  };
+  }
 
-  const previousStep = () => {
+  export const previousStep = () => {
     if ($currentStep - 1 > -1) {
       updateStepStatus(currentStep.decrement);
     }
   };
 </script>
+
+<div class="multistep-master-form">
+  <div id="multistep-error-messages" />
+  <h1 class="multistep-form-title">{multiStepOptions.formTitle}</h1>
+  <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle}</h5>
+  <form class="multistep-form">
+    <div class="multistep-left-sidebar">
+      {#each multiStepOptions.stepsDescription as step}
+        <div class="multistep-title-side">
+          <span class="name">{step.title}</span>
+          <span class="subtitle">{step.subtitle}</span>
+        </div>
+      {/each}
+    </div>
+    <div class="separator">
+      {#each multiStepOptions.stepsDescription as step, index}
+        <div class="separator-line">
+          <span class="dot" />
+        </div>
+        {#if $currentStep === index}
+          <div class="separator-check-current">
+            <div class="separator-check-number">{index + 1}</div>
+          </div>
+        {:else if $currentStep > index}
+          <div class="separator-check">
+            <svg viewBox="0 0 32 32" style="fill:#48DB71">
+              <path d="M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z" />
+            </svg>
+          </div>
+        {:else if $currentStep < index}
+          <div class="separator-check-pending">
+            <div class="separator-check-number-blank">{index + 1}</div>
+          </div>
+        {/if}
+      {/each}
+    </div>
+    <!-- This slot represents StepForm  -->
+    <div class="multistep-right-sidebar">
+      <slot />
+    </div>
+    <!-- end of  StepForm  -->
+  </form>
+  <div class="multistep-continue-button">
+    <span on:click={previousStep} id="multistep-prev">prev</span>
+    |
+    <span on:click={nextStep} id="multistep-next">next</span>
+  </div>
+</div>
 
 <style>
   .name {
@@ -174,51 +221,3 @@
     transition: visibility 0s, opacity 0.2s linear;
   }
 </style>
-
-<div class="multistep-master-form">
-  <div id="multistep-error-messages" />
-  <h1 class="multistep-form-title">{multiStepOptions.formTitle}</h1>
-  <h5 class="multistep-form-subtitle">{multiStepOptions.formSubtitle}</h5>
-  <form class="multistep-form">
-    <div class="multistep-left-sidebar">
-      {#each multiStepOptions.stepsDescription as step}
-        <div class="multistep-title-side">
-          <span class="name">{step.title}</span>
-          <span class="subtitle">{step.subtitle}</span>
-        </div>
-      {/each}
-    </div>
-    <div class="separator">
-      {#each multiStepOptions.stepsDescription as step, index}
-        <div class="separator-line">
-          <span class="dot" />
-        </div>
-        {#if $currentStep === index}
-          <div class="separator-check-current">
-            <div class="separator-check-number">{index + 1}</div>
-          </div>
-        {:else if $currentStep > index}
-          <div class="separator-check">
-            <svg viewBox="0 0 32 32" style="fill:#48DB71">
-              <path d="M1 14 L5 10 L13 18 L27 4 L31 8 L13 26 z" />
-            </svg>
-          </div>
-        {:else if $currentStep < index}
-          <div class="separator-check-pending">
-            <div class="separator-check-number-blank">{index + 1}</div>
-          </div>
-        {/if}
-      {/each}
-    </div>
-    <!-- This slot represents StepForm  -->
-    <div class="multistep-right-sidebar">
-      <slot />
-    </div>
-    <!-- end of  StepForm  -->
-  </form>
-  <div class="multistep-continue-button">
-    <span on:click={previousStep} id="multistep-prev">prev</span>
-    |
-    <span on:click={nextStep} id="multistep-next">next</span>
-  </div>
-</div>

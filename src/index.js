@@ -1,8 +1,3 @@
-export {
-  default as Step
-}
-from "./StepForm.svelte";
-export {
-  default as Form
-}
-from "./MasterForm.svelte";
+import Step from "./StepForm.svelte";
+import Form from "./MasterForm.svelte";
+export { Step, Form };
